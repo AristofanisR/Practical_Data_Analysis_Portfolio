@@ -956,7 +956,7 @@ This study has several limitations that should be considered when interpreting t
 
 # Data Privacy and Code Availability
 
-The analysis dataset was obtained by Dr. Brett Romano Ely and Dr. Matthew Ely from the Department of Health Sciences at Providence College. The replication code can be found at https://github.com/AristofanisR/Practical_Data_Analysis_Project1
+The analysis dataset was obtained by Dr. Brett Romano Ely and Dr. Matthew Ely from the Department of Health Sciences at Providence College. The replication code can be found at <https://github.com/AristofanisR/Practical_Data_Analysis_Portfolio/tree/main/Project1>
 
 
 \newpage
