@@ -16,7 +16,7 @@ link-citations: yes
 abstract: |
   **Purpose**: This project evaluates the efficacy of smoking cessation treatments among adults with Major Depressive Disorder (MDD), focusing on identifying baseline factors that moderate and predict treatment success. This analysis aims to clarify the role of both behavioral and pharmacological interventions, examining interactions between participant characteristics and treatment components.
 
-  **Methods**: Using data from a randomized, placebo-controlled trial, we assessed the effectiveness of Behavioral Activation (BA) and standard treatment (ST), each paired with either varenicline or a placebo, in supporting smoking cessation. Three statistical approaches-- Lasso regression, stepwise logistic regression, and best subset selection-- were employed to identify significant moderators and predictors of abstinence at the end of treatment, based on a sample of 300 adult smokers with current or past MDD.
+  **Methods**: Using data from a randomized, placebo-controlled trial, we assessed the effectiveness of Behavioral Activation (BA) and standard treatment (ST), each paired with either varenicline or a placebo, in supporting smoking cessation. Two statistical approaches-- Lasso regression and Elastic Net Regression with 10-fold cross validation-- were employed to identify significant moderators and predictors of abstinence at the end of treatment, based on a sample of 300 adult smokers with current or past MDD.
     
   **Results**: The findings indicate that specific baseline characteristics, including FTCD score (a measure of nicotine dependence) and Nicotine Metabolism Ratio (NMR), significantly influence treatment outcomes. FTCD score was associated with lower abstinence rates, while a higher NMR was linked to greater likelihood of cessation. These predictors were consistently identified across models, suggesting a robust relationship between these factors and smoking cessation outcomes.
 
@@ -65,6 +65,7 @@ library(ggmosaic)
 library(ggbeeswarm)
 library(ggdist)
 library(cowplot)
+library(caret)
 ```
 
 # Data Overview
@@ -343,8 +344,8 @@ To handle missing data, the Multiple Imputation by Chained Equations (MICE) meth
 data_mice <- mice(data, m = 5
                   , method = "pmm", maxit = 50, seed = 58, printFlag= FALSE)
 
-# Complete the data by extracting one of the imputed datasets
-data_mice <- complete(data_mice, action = 4)
+data_mice_4 = complete(data_mice, action = 4)
+
 ```
 
 ## Exploration of potential interactions
@@ -356,14 +357,14 @@ We can easily observe from Table 3 that Black individuals have a preference for 
 
 ```{r}
 # Check the relationship between Menthol Cigarettes and Race
-table_race_menthol <- table(data_mice$race, data_mice$Only.Menthol)
+table_race_menthol <- table(data_mice_4$race, data_mice_4$Only.Menthol)
 
 # Chi-square test
 chi_square_test <- chisq.test(table_race_menthol) #p-value too small
 #We reject the null hypothesis (which is there is no association)
 
 chi_square_test_note <- paste0(
-  sprintf("Chi-Square Statistic: %.4f", chi_square_test$statistic), 
+  sprintf("Chi-Square Statistic: %.4f", chi_square_test$statistic),
   sprintf(", p-value : Approaching %.4f", chi_square_test$p.value)
 )
 
@@ -382,10 +383,10 @@ Additionally, we examine the relationships between education, income, race, and 
 
 ```{r,fig.width = 10, fig.height = 4, out.width = "80%", fig.align = "center"}
 # Mosaic between education, income
-# mosaic = vcd::mosaic(~ inc + edu_merged, data = data_mice, shade = TRUE, 
+# mosaic = vcd::mosaic(~ inc + edu_merged, data = data_mice_4, shade = TRUE, 
 #                      legend = TRUE, labeling = labeling_values) 
 
-data_viz = data_mice %>%
+data_viz = data_mice_4 %>%
   mutate(
     edu_merged = recode(factor(edu_merged),
                         `1` = "<= High school",
@@ -436,7 +437,7 @@ heatmap2 = ggplot(data = data_viz) +
   )
 
 # Beeswarm plot between Sex, NMR
-#beeswarm = ggplot(data_mice, aes(x = sex_ps, y = NMR, color = sex_ps)) +
+#beeswarm = ggplot(data_mice_4, aes(x = sex_ps, y = NMR, color = sex_ps)) +
  # geom_beeswarm(size = 2, alpha = 0.7) +
   #labs(x = "Sex", y = "NMR", title = "Beeswarm Plot") +
   #theme_minimal() +
@@ -446,7 +447,7 @@ heatmap2 = ggplot(data = data_viz) +
 
 
 # Raincloud plot between edu, income
-raincloud = ggplot(data_mice, aes(x = race, y = ftcd_score, fill = race)) +
+raincloud = ggplot(data_mice_4, aes(x = race, y = ftcd_score, fill = race)) +
   ggdist::stat_halfeye(adjust = 0.5, width = 0.6, .width = 0, 
                        justification = -0.2, point_colour = NA) +
   geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.5) +
@@ -496,51 +497,19 @@ After training the model, we evaluated it on the test set, providing an unbiased
 
 The final model coefficients at the optimal lambda include only those variables and interactions with non-zero coefficients, which are presented in the resulting tables (Table 4 and Table 5). This selection helps identify significant moderators of smoking abstinence while maintaining a simpler model.
 
+!!placeholder
+
+!!placeholder
+
+!!placeholder
+
+!!placeholder
+
+!!placeholder
+!!placeholder
+
 ```{r}
-# Modeling Preprocessing
-# Define the outcome and variables in the model
-outcome <- data_mice$abst
-variable_names <- c("Var", "BA", "age_ps", "sex_ps", "inc", "edu_merged", "race",
-                     "ftcd_score", "ftcd.5.mins", "bdi_score_w00", "cpd_ps",
-                     "crv_total_pq1", "hedonsum_n_pq1", "hedonsum_y_pq1",
-                     "shaps_score_pq1", "otherdiag", "antidepmed", "mde_curr",
-                     "NMR", "Only.Menthol", "readiness")
-variables <- data_mice[, variable_names]
-# for Lasso (to break down factors with >2 levels)
-variables_dummy <- model.matrix(~ 0 + ., data = variables)
-# remove the extra reference group
-variables_dummy <- variables_dummy[, -which(colnames(variables_dummy) =="Var0")]
-
-# Split into train and test
-set.seed(58)
-train_index <- sample(1:nrow(data_mice), 0.7 * nrow(data_mice))
-train_data <- data_mice[train_index,]
-test_data <- data_mice[-train_index,]
-train_outcome <- outcome[train_index]
-test_outcome <- outcome[-train_index]
-
-# for Lasso
-train_variables_dummy <- variables_dummy[train_index, ]
-test_variables_dummy <- variables_dummy[-train_index, ]
-
-# for best subset (we will do this next)
-train_variables <- variables[train_index, ]
-test_variables <- variables[-train_index, ]
-
-train_data_glmnet = data.frame(abst = train_outcome, train_variables_dummy)
-test_data_glmnet = data.frame(abst = test_outcome, test_variables_dummy)
-
-### First objective - Moderators
-
-# We have to keep BA and Var with 0 penalty
-# Lasso Regression
-# ^2 generates all pairwise interactions
-train_variables_dummy_df <- as.data.frame(train_variables_dummy)
-train_variables_dummy_full_interactions <- model.matrix(~ .^2,
-                                              data = train_variables_dummy_df)
-test_variables_dummy_df <- as.data.frame(test_variables_dummy)
-test_variables_dummy_full_interactions <- model.matrix(~ .^2,
-                                               data = test_variables_dummy_df)
+# To identify the potential interaction terms for moderator effects
 train_variables_dummy_include_names <- c(
   "Var1", "BA1", "age_ps", "sex_ps2", "inc2", "inc3",
   "inc4", "inc5", "edu_merged2", "edu_merged3",
@@ -585,589 +554,513 @@ train_variables_dummy_include_names <- c(
   "NMR:readiness", "ftcd_score:NMR"
 )
 
-train_variables_dummy_include = train_variables_dummy_full_interactions[,train_variables_dummy_include_names]
-
-test_variables_dummy_include = test_variables_dummy_full_interactions[,train_variables_dummy_include_names]
-
-# Initialize penalty factors to 1 for all variables
-penalty_factors <- rep(1, ncol(train_variables_dummy_include))
-
-# Identify columns corresponding exactly to "Var1" and "BA1" (not their interactions)
-var1_col <- grep("^Var1$", colnames(train_variables_dummy_include))
-ba1_col <- grep("^BA1$", colnames(train_variables_dummy_include))
-
-penalty_factors[c(var1_col, ba1_col)] <- 0
-names(penalty_factors) <- colnames(train_variables_dummy_include)
-
-set.seed(58)
-Lasso_model <- cv.glmnet(as.matrix(train_variables_dummy_include), train_outcome,
-                         penalty.factor = penalty_factors,
-                         alpha = 1, family = "binomial")
-
-# Extract coefficients at the optimal lambda (best_lambda)
-best_lambda_Lasso <- Lasso_model$lambda.min
-#remove intercept
-optimal_coefs_Lasso <- as.numeric(coef(Lasso_model, s = best_lambda_Lasso)[-1])
-coef_names_Lasso <- rownames(coef(Lasso_model, s = best_lambda_Lasso))[-1]  
-
-result_table_Lasso <- data.frame(
-  variable = coef_names_Lasso,
-  Coefficient = optimal_coefs_Lasso
-) %>%
-  filter(Coefficient != 0)
 
 ```
 
-## Stepwise Logistic Regression
+```{r helper-functions}
+variable_names <- c("Var", "BA", "age_ps", "sex_ps", "inc", "edu_merged", "race",
+                     "ftcd_score", "ftcd.5.mins", "bdi_score_w00", "cpd_ps",
+                     "crv_total_pq1", "hedonsum_n_pq1", "hedonsum_y_pq1",
+                     "shaps_score_pq1", "otherdiag", "antidepmed", "mde_curr",
+                     "NMR", "Only.Menthol", "readiness")
 
-Furthermore, we performed stepwise logistic regression to determine the optimal combination of variables and interaction terms for predicting smoking abstinence. The process starts by defining both the outcome variable and a set of moderator and predictor variables. Specifically, the outcome variable represents abstinence, and a set of relevant predictor variables is selected from our dataset based on their potential influence on the outcome. These predictors include demographic information, baseline characteristics, and other relevant factors. The model is built to include both main effects (the predictors' direct effects on abstinence) and potential interaction terms. The main effects include the variables Var and BA, that should be controlled in all models. We also used additional predictors like age, gender, income, education level, race, and other baseline measures. Additionally, a set of interaction terms is specified, particularly those involving BA and Var, to explore moderation effects. These interaction terms allow the model to capture relationships where the effect of one predictor on abstinence might depend on the level of another predictor, adding a layer of complexity to the model.
+# Helper function to perform model fitting
+fit_models <- function(data) {
+  # Define predictors and outcome
+ 
+  outcome <- data$abst
+  variables <- data[, variable_names]
+  # for Lasso (to break down factors with >2 levels)
+  variables_dummy <- model.matrix( ~ 0 + ., data = variables)
+  # remove the extra reference group
+  variables_dummy <- variables_dummy[, -which(colnames(variables_dummy) ==
+                                                "Var0")]
+ 
 
-Using the step function, the model undergoes stepwise logistic regression, which involves both forward and backward selection to find the most effective model. This approach adds or removes predictors and interactions iteratively, aiming to optimize the model based on the Akaike Information Criterion (AIC).
+  # Split into train and test sets
+  set.seed(58)
+  train_index <- createDataPartition(outcome, p = 0.7, list = FALSE)
+  train_data <- data[train_index, ]
+  train_outcome = train_data$abst
+  test_data <- data[-train_index, ]
+  test_outcome = test_data$abst
+ 
+  train_variables_dummy <- variables_dummy[train_index, ]
+  test_variables_dummy <- variables_dummy[-train_index, ]
+ 
+  # ^2 generates all pairwise interactions
+  train_variables_dummy_df <- as.data.frame(train_variables_dummy)
+  train_variables_dummy_full_interactions <- model.matrix( ~ . ^ 2, data = train_variables_dummy_df)
+ 
+  test_variables_dummy_df <- as.data.frame(test_variables_dummy)
+  test_variables_dummy_full_interactions <- model.matrix( ~ . ^ 2, data = test_variables_dummy_df)
+ 
+  train_variables_dummy_include =
+    train_variables_dummy_full_interactions[, train_variables_dummy_include_names]
+  test_variables_dummy_include =
+    test_variables_dummy_full_interactions[, train_variables_dummy_include_names]
+ 
+  # Set penalty factors to enforce keeping Var and BA
+  # Initialize penalty factors to 1 for all variables
+  penalty_factors <- rep(1, ncol(train_variables_dummy_include))
 
-To sum up, this stepwise approach optimizes the logistic regression model by keeping the most relevant predictors and discarding those that do not improve the model’s performance, leading to an efficient and interpretable model for predicting smoking abstinence.
+  # Identify columns corresponding exactly to "Var1" and "BA1" (not their interactions)
+  var1_col <- grep("^Var1$", colnames(train_variables_dummy_include))
+  ba1_col <- grep("^BA1$", colnames(train_variables_dummy_include))
+ 
+  penalty_factors[c(var1_col, ba1_col)] <- 0
+  names(penalty_factors) <- colnames(train_variables_dummy_include)
+
+  # Fit Elastic Net model
+  enet_model <- cv.glmnet(
+    as.matrix(train_variables_dummy_include),
+    train_outcome,
+    penalty.factor = penalty_factors,
+    alpha = 0.5,
+    family = "binomial",
+    nfold = 10
+  )
+
+  # Fit Lasso model (alpha = 1)
+  lasso_model <- cv.glmnet(
+    as.matrix(train_variables_dummy_include),
+    train_outcome,
+    penalty.factor = penalty_factors,
+    alpha = 1,
+    family = "binomial",
+    nfold = 10
+  )
+
+  list(
+    elastic_net = enet_model,
+    lasso = lasso_model
+  )
+}
+```
+
+```{r fit-multiple-imputed}
+# Fit models across imputed datasets
+aim1_results <- list()
+for (i in 1:5) {
+  dataset <- complete(data_mice
+                      , action = i)
+  aim1_results[[i]] <- fit_models(dataset)
+}
+```
+
+
 
 ```{r}
-# Logistic regression
+# Initialize lists to store coefficients for Elastic Net and Lasso
+elastic_net_coefs <- lapply(aim1_results, function(res) coef(res$elastic_net, s = res$elastic_net$lambda.min))
+lasso_coefs <- lapply(aim1_results, function(res) coef(res$lasso, s = res$lasso$lambda.min))
 
-# Define outcome and predictor variables
-outcome <- data_mice$abst
-variable_names <- c("Var", "BA", "age_ps", "sex_ps", "inc", "edu_merged", 
-                    "race",
-                    "ftcd_score", "ftcd.5.mins", "bdi_score_w00", "cpd_ps",
-                    "crv_total_pq1", "hedonsum_n_pq1", "hedonsum_y_pq1",
-                    "shaps_score_pq1", "otherdiag", "antidepmed", "mde_curr",
-                    "NMR", "Only.Menthol", "readiness")
+# Function to process coefficients for averaging and selection count
+process_coefs <- function(coefs_list) {
+  # Combine coefficients into a matrix
+  coefs_matrix <- do.call(cbind, lapply(coefs_list, function(coef) as.numeric(coef)))
+  rownames(coefs_matrix) <- rownames(coefs_list[[1]])
+ 
+  # Count non-zero selections for each variable
+  selection_counts <- rowSums(coefs_matrix != 0)
+ 
+  # Compute the average of coefficients only when selected (non-zero)
+  averaged_coefs <- rowSums(coefs_matrix) / selection_counts
+  averaged_coefs[is.na(averaged_coefs)] <- 0  # Handle cases where selection_counts is 0
+ 
+  # Create result table
+  result_table <- data.frame(
+    variable = rownames(coefs_matrix),
+        SelectionTimes = selection_counts,
+    AverageCoefficient = averaged_coefs
+  ) %>%
+    filter(SelectionTimes > 0)  # Keep only variables selected at least once
+ 
+  return(result_table)
+}
 
-# Prepare the dataset
-variables <- data_mice[, variable_names]
-variables$Var <- factor(variables$Var)
-variables$BA <- factor(variables$BA)
+# Process Elastic Net and Lasso coefficients
+result_table_enet <- process_coefs(elastic_net_coefs)
+result_table_lasso <- process_coefs(lasso_coefs)
 
-# Main effects for `Var` and `BA` (to be controlled in all models)
-main_effects <- paste(c("Var", "BA", "age_ps", "sex_ps", "inc", 
-                        "edu_merged", "race",
-                        "ftcd_score", "ftcd.5.mins", "bdi_score_w00", 
-                        "cpd_ps",
-                        "crv_total_pq1", "hedonsum_n_pq1", 
-                        "hedonsum_y_pq1",
-                        "shaps_score_pq1", "otherdiag", "antidepmed", 
-                        "mde_curr",
-                        "NMR", "Only.Menthol", "readiness"), 
-                      collapse = " + ")
-
-# Define the interaction terms we want to consider
-interaction_terms <- paste(
-  
-  "BA:mde_curr + BA:age_ps + BA:sex_ps + BA:race + BA:ftcd_score",
-  "BA:shaps_score_pq1 + BA:bdi_score_w00",
-  "BA:otherdiag + BA:antidepmed",
-  "BA:mde_curr + BA:NMR",
-  "BA:Only.Menthol + BA:readiness + BA:cpd_ps + Var:BA + BA:cpd_ps",
-  
-  "Var:age_ps + Var:sex_ps + Var:race + Var:ftcd_score + Var:cpd_ps",
-  "inc:edu_merged + antidepmed:readiness + Only.Menthol:readiness", 
-  "mde_curr:readiness + ftcd.5.mins:readiness + bdi_score_w00:readiness",
-  "Var:shaps_score_pq1 + ",
-  "shaps_score_pq1:mde_curr + sex_ps:ftcd_score + race:ftcd_score + 
-  age_ps:ftcd_score",
-  "sex_ps:Only.Menthol + race:Only.Menthol + inc:Only.Menthol + 
-  edu_merged:Only.Menthol",
-  "sex_ps:NMR + age_ps:NMR + cpd_ps:NMR + NMR:readiness + ftcd_score:NMR",
-  sep = " + "
-)
-
-# Full formula for main effects and interactions
-full_formula <- as.formula(paste("abst ~", main_effects,
-                                 "+", interaction_terms))
-
-# Define scope with `Var` and `BA` as forced terms in the main model
-scope_list <- list(
-  lower = as.formula("abst ~ Var + BA"),  # Minimal model with controlled terms
-  upper = full_formula         # Full model with all main and interaction terms
-)
-
-# Fit logistic regression model with stepwise selection
-set.seed(58)
-logistic_model <- step(
-  glm(formula = abst ~ Var + BA, data = train_data, family = "binomial"),
-  scope = scope_list,
-  direction = "both",
-  trace=0
-)
 ```
 
-## Best Subset Selection
-
-Lastly, we performed best subset selection to identify the most predictive set of variables for smoking abstinence. For the first objective, we used sequential replacement (it was not possible to use every possible combination of variables like we did in the second objective-- exhaustive replacement-- as the number of interactions could be over a million) to find the one that best explains the outcome with a balance between predictive power and model complexity.
-
-The selection process started with defining the outcome variable and predictor variables in the training dataset. Then we examined subsets of the predictors, looking for the best combination based on specific criteria. Here, Var1 and BA1 are forced into the model, meaning these terms will always be included in the subset selection process due to their importance as main effects. After that, we identified the subset with the minimum Mallows’ $Cp$ statistic, which is often used to select a model with good fit while avoiding overfitting.
-
-In essence, this approach evaluates possible subsets of predictors and selects the combination with the lowest $Cp$, yielding a model that is both predictive and efficient for determining smoking abstinence.
-
-```{r, results= 'hide'}
-# Best subset selection
-
-# Run best subset selection with regsubsets
-best_subset_model <- regsubsets(
-  y = train_outcome, x = train_variables_dummy_include,
-  force.in = c("Var1", "BA1"), nbest = 1, 
-  nvmax = 100,  # Adjust this based on how many variables you want to consider
-  method = "seq", force.out = NULL,
-  really.big=T
-)
-
-# Summarize results
-best_subset_summary <- summary(best_subset_model)
-best_subset_summary = summary(best_subset_model)
-cp_min = which.min(best_subset_summary$cp) # min is 10
-best_subset_coefs = coef(best_subset_model, cp_min)
-best_subset_names = names(coef(best_subset_model, cp_min))
-```
-
-# Results
-
-Table 4 compares the coefficients of variables selected by the three different modeling approaches and their corresponding Odds Ratios: logistic regression with stepwise selection, Lasso regression, and best subset selection. This combined table allows for easy comparison of the variables who are considered the most predictive across these methods and their respective coefficients.
-
-We can observe that except BA1 and Var1 (obviously - we forced them) there are no other common variables between all three model selection methods. However, there are two common variables between Lasso and Stepwise Regression (ftcd_score, NMR). FTSD score's OR is smaller than 1 in both Lasso and Stepwise Regression, meaning that participants with higher cigarette dependence would have lower success rate of smoking abstinence. On the opposite, the OR of NMR is greater than 1 in both methods, meaning that participants with higher nicotine metabolism ratio would have a higher possibility of quitting smoking. The opposite directionality between these two variables' impact on smoking cessation showcases the potential biological relation between baseline characteristic and the outcome. Except from that, every other variable is present to one method solely, indicating that the three methods used different selection criteria and thus lead to high variability in variables/interaction terms selected.
 
 ```{r}
-# Create a table with coefficients from Logistic, Lasso, Best Subset Selection
+# Calculate OR for each coefficient for each method and rename columns correctly
+enet_df <- result_table_enet %>%
+  rename(`Selection Times` = SelectionTimes) %>%
+  rename(`Elastic Net Average Coef` = AverageCoefficient) %>%
+  mutate(`Elastic Net Average OR` = exp(`Elastic Net Average Coef`))
 
-# Logistic coefficients
-stepwise_coefs <- coef(logistic_model)
-stepwise_df <- data.frame(
-  variable = names(stepwise_coefs),
-  `Stepwise` = as.numeric(stepwise_coefs)
-)
+lasso_df <- result_table_lasso %>%
+  rename(`Selection Times` = SelectionTimes) %>%
+  rename(`Lasso Average Coef` = AverageCoefficient) %>%
+  mutate(`Lasso OR` = exp(`Lasso Average Coef`))
 
-# Lasso coefficients
-Lasso_df <- result_table_Lasso %>%
-  rename(`Lasso` = Coefficient)
 
-# Best subset coefficients
-best_subset_df <- data.frame(
-  variable = names(best_subset_coefs),
-  `Best Subset` = as.numeric(best_subset_coefs)
-)
 
-# Merge all into one table based on variable names
-combined_df <- full_join(Lasso_df, stepwise_df, by = "variable") %>%
-  full_join(best_subset_df, by = "variable") %>%
-  mutate(across(where(is.numeric), ~ round(.x, 4)))
+# Merge all data frames based on variable names
+combined_df <- full_join(lasso_df, enet_df, by = "variable") %>%
+  mutate(across(where(is.numeric), ~ round(.x, 4))) 
 
 # Remove the intercept row
 combined_df <- combined_df[combined_df$variable != "(Intercept)", ]
 
-# Replace NA values with an empty space
-combined_df[is.na(combined_df)] <- " "
+# Standardize interaction terms by sorting them alphabetically
+combined_df <- combined_df %>%
+  mutate(
+    variable = sapply(variable, function(x) {
+      terms <- unlist(strsplit(x, ":"))
+      if (length(terms) > 1) {
+        paste(sort(terms), collapse = ":")
+      } else {
+        x
+      }
+    })
+  )
 
-colnames(combined_df) <- gsub("Best.Subset", "Best Subset", colnames(combined_df))
+# Combine rows with the same standardized interaction term names
+combined_df <- combined_df %>%
+  group_by(variable) %>%
+  summarize(across(everything(), ~ ifelse(is.numeric(.), sum(as.numeric(.), na.rm = TRUE), .))) %>%
+  ungroup()
 
-# Change "variable" to "Variables" in the combined_df
-colnames(combined_df)[colnames(combined_df) == "variable"] <- "Variables"
+# Replace zeroes and any remaining NAs with an empty space for readability
+combined_df <- combined_df %>%
+  mutate(across(where(is.numeric), ~ ifelse(. == 0, "", .))) %>%
+  replace(is.na(.), " ")
+
+# Display the final combined table with grouped headers
+combined_df %>%
+  kable(row.names = F,
+        col.names = c("Variable", "Selection Times","Average Coef", "OR", "Selection Times", "Average Coef", "OR"),
+        caption = "Summary of Average Coefficients and Odds Ratios for Potential Moderator Effects across Model Selection Methods") %>%
+  add_header_above(c(" " = 1, "Lasso" = 3, "Elastic Net" = 3)) %>%
+  kable_styling(full_width = F, position = "center", font_size = 9)
+
 ```
 
 
 ```{r}
-# Create a table with ORs from Logistic, Lasso, and Best Subset Selection
+# Initialize lists to store results for each imputation
+roc_results_enet <- list()
+calib_results_enet <- list()
+auc_values_enet <- list()
 
-# Logistic coefficients (converted to OR)
-stepwise_or <- exp(stepwise_coefs)  # Convert coefficients to Odds Ratios
-stepwise_df <- data.frame(
-  variable = names(stepwise_or),
-  `Stepwise OR` = as.numeric(stepwise_or)
-)
+roc_results_lasso <- list()
+calib_results_lasso <- list()
+auc_values_lasso <- list()
 
-# Lasso coefficients (converted to OR)
-Lasso_or_df <- result_table_Lasso %>%
-  mutate(`Lasso OR` = exp(Coefficient)) %>%  # Convert coefficients to Odds Ratios
-  dplyr::select(variable, `Lasso OR`)
+num_cuts <- 10  # Number of bins for calibration
 
-# Best subset coefficients (converted to OR)
-best_subset_or <- exp(best_subset_coefs)  # Convert coefficients to Odds Ratios
-best_subset_df <- data.frame(
-  variable = names(best_subset_or),
-  `Best Subset OR` = as.numeric(best_subset_or)
-)
+for (i in 1:5) {
+  dataset <- complete(data_mice, action = i)
+ 
+  # Split the dataset into training and test sets
+  set.seed(58)
+  train_index <- createDataPartition(dataset$abst, p = 0.7, list = FALSE)
+  train_data <- dataset[train_index, ]
+  test_data <- dataset[-train_index, ]
+ 
+  # Prepare predictors and outcome for test set
+  test_variables_dummy <- model.matrix(~ 0 + ., data = test_data[, variable_names])
+  test_variables_dummy <- test_variables_dummy[, -which(colnames(test_variables_dummy) == "Var0")]
+  test_variables_dummy_full_interactions <- model.matrix(~ . ^ 2, data = as.data.frame(test_variables_dummy))
+  test_variables_dummy_include <- test_variables_dummy_full_interactions[, train_variables_dummy_include_names]
+  test_outcome <- test_data$abst
 
-# Merge all into one table based on variable names
-combined_or_df <- full_join(Lasso_or_df, stepwise_df, by = "variable") %>%
-  full_join(best_subset_df, by = "variable") %>%
-  mutate(across(where(is.numeric), ~ round(.x, 4)))
+  # Predict probabilities for Elastic Net
+  predicted_prob_enet <- as.numeric(predict(aim1_results[[i]]$elastic_net,
+                                            newx = as.matrix(test_variables_dummy_include),
+                                            s = "lambda.min", type = "response"))
+ 
+  # Predict probabilities for Lasso
+  predicted_prob_lasso <- as.numeric(predict(aim1_results[[i]]$lasso,
+                                             newx = as.matrix(test_variables_dummy_include),
+                                             s = "lambda.min", type = "response"))
 
-# Remove the intercept row
-combined_or_df <- combined_or_df[combined_or_df$variable != "(Intercept)", ]
+  # Compute ROC and AUC for Elastic Net
+  roc_enet <- roc(test_outcome, predicted_prob_enet)
+  roc_results_enet[[i]] <- data.frame(
+    Specificity = rev(roc_enet$specificities),
+    Sensitivity = rev(roc_enet$sensitivities)
+  )
+  auc_values_enet[[i]] <- auc(roc_enet)  # Store AUC separately
+ 
+  # Compute ROC and AUC for Lasso
+  roc_lasso <- roc(test_outcome, predicted_prob_lasso)
+  roc_results_lasso[[i]] <- data.frame(
+    Specificity = rev(roc_lasso$specificities),
+    Sensitivity = rev(roc_lasso$sensitivities)
+  )
+  auc_values_lasso[[i]] <- auc(roc_lasso)  # Store AUC separately
 
-# Replace NA values with an empty space
-combined_or_df[is.na(combined_or_df)] <- " "
+ 
+  # Calibration for Elastic Net
+  calib_data_enet <- data.frame(
+    prob = predicted_prob_enet,
+    bin = cut(predicted_prob_enet, breaks = num_cuts),
+    class = as.numeric(test_outcome) - 1
+  )
+  calib_results_enet[[i]] <- calib_data_enet %>%
+    group_by(bin) %>%
+    summarise(
+      observed = mean(class),
+      predicted = mean(prob),
+      se = sqrt(observed * (1 - observed) / n())
+    )
+ 
+  # Calibration for Lasso
+  calib_data_lasso <- data.frame(
+    prob = predicted_prob_lasso,
+    bin = cut(predicted_prob_lasso, breaks = num_cuts),
+    class = as.numeric(test_outcome) - 1
+  )
+  calib_results_lasso[[i]] <- calib_data_lasso %>%
+    group_by(bin) %>%
+    summarise(
+      observed = mean(class),
+      predicted = mean(prob),
+      se = sqrt(observed * (1 - observed) / n())
+    )
+}
 
-# Rename columns
-colnames(combined_or_df) <- gsub("Best.Subset", "Best Subset", colnames(combined_or_df))
-colnames(combined_or_df)[colnames(combined_or_df) == "variable"] <- "Variables"
+
 ```
 
 ```{r}
-# Combined table for both coef and ORs
-full_df = left_join(combined_df, combined_or_df, by = "Variables") 
+# Extract numeric AUC values from the list of AUC objects
+auc_numeric_enet <- sapply(auc_values_enet, function(x) as.numeric(x))
+auc_numeric_lasso <- sapply(auc_values_lasso, function(x) as.numeric(x))
 
-kable(full_df, row.names = FALSE, 
-      col.names = c("Variables","Lasso", "Stepwise", "Best Subset", 
-                     "Lasso OR", "Stepwise OR", "Best Subset OR"),
-      caption = "Summary of Coefficients and Odds Ratios across 3 Sel
-ection Methods (for Moderators)") %>%
-  kable_styling(font_size = 8)
+# Compute the mean AUC
+mean_auc_enet <- mean(auc_numeric_enet)
+mean_auc_lasso <- mean(auc_numeric_lasso)
+
 ```
 
-The plots below provide a comprehensive comparison of three model selection methods — Lasso, Stepwise, and Best Subset — in predicting smoking abstinence.
+
+```{r}
+# Define a common set of specificity thresholds
+common_specificities <- seq(0, 1, length.out = 100)
+
+# Interpolate sensitivity for each ROC curve at the common specificities
+interp_sensitivities_lasso <- sapply(roc_results_lasso, function(roc_data) {
+  approx(x = roc_data$Specificity, y = roc_data$Sensitivity, xout = common_specificities)$y
+})
+
+# Compute the mean sensitivity across imputations
+mean_sensitivity_lasso <- rowMeans(interp_sensitivities_lasso, na.rm = TRUE)
+
+# Create a data frame for the averaged ROC curve
+mean_roc_lasso <- data.frame(
+  Specificity = common_specificities,
+  Sensitivity = mean_sensitivity_lasso
+)
+
+# Plot the averaged ROC curve
+ROC_lasso = ggplot(mean_roc_lasso, aes(x = 1 - Specificity, y = Sensitivity)) +
+  geom_line(color = "black", size = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
+  annotate("text", x = 0.8, y = 0.2, label = paste("Mean AUC =", round(mean_auc_lasso, 2)), size = 3, color = "Black") +
+  labs(
+    x = "1 - Specificity",
+    y = "Sensitivity"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+# Define a common set of specificity thresholds
+common_specificities <- seq(0, 1, length.out = 100)
+
+# Interpolate sensitivity for each ROC curve at the common specificities
+interp_sensitivities_enet <- sapply(roc_results_enet, function(roc_data) {
+  approx(x = roc_data$Specificity, y = roc_data$Sensitivity, xout = common_specificities)$y
+})
+
+# Compute the mean sensitivity across imputations
+mean_sensitivity_enet <- rowMeans(interp_sensitivities_enet, na.rm = TRUE)
+
+# Create a data frame for the averaged ROC curve
+mean_roc_enet <- data.frame(
+  Specificity = common_specificities,
+  Sensitivity = mean_sensitivity_enet
+)
+
+# Plot the averaged ROC curve
+ROC_enet = ggplot(mean_roc_enet, aes(x = 1 - Specificity, y = Sensitivity)) +
+  geom_line(color = "black", size = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
+  annotate("text", x = 0.8, y = 0.2, label = paste("Mean AUC =", round(mean_auc_enet, 2)), size = 3, color = "Black") +
+  labs(
+    x = "1 - Specificity",
+    y = "Sensitivity"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+# Combine Calibration Results Across Imputations
+calib_combined_enet <- do.call(rbind, calib_results_enet) %>%
+  group_by(bin) %>%
+  summarise(
+    observed = mean(observed),
+    predicted = mean(predicted),
+    se = sqrt(sum(se^2) / n())
+  )
+
+calib_combined_lasso <- do.call(rbind, calib_results_lasso) %>%
+  group_by(bin) %>%
+  summarise(
+    observed = mean(observed),
+    predicted = mean(predicted),
+    se = sqrt(sum(se^2) / n())
+  )
+
+```
+
+```{r}
+num_cuts <- 10  # Number of bins for calibration
+
+# Add Loess Fit for Flexible Calibration Line
+loess_fit <- loess(observed ~ predicted, data = calib_combined_lasso, span = 0.75)
+calib_combined_lasso$loess_pred <- predict(loess_fit, calib_combined_lasso$predicted)
+
+# Plot Calibration Curve with Error Bars
+calib_error_bar_lasso = ggplot(calib_combined_lasso) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
+                    ymax = observed + 1.96 * se),
+                colour="black", width=.01)+
+  geom_point(aes(x = predicted, y = observed)) +
+  labs(x = "Expected Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence") +
+  #       title = "Calibration Plot for Elastic Net Model with Error Bars"
+  theme_minimal()
+
+
+# Plot Calibration Curve with Loess
+calib_combined_lasso <- calib_combined_lasso %>%
+  mutate(loess_ci_lower = loess_pred - 1.96 * sd(loess_pred),
+         loess_ci_upper = loess_pred + 1.96 * sd(loess_pred))
+
+calib_loess_lasso = ggplot(calib_combined_lasso, aes(x = predicted, y = observed)) +
+  # Flexible calibration (Loess)
+  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
+  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "red",
+                                "Flexible calibration" = "slateblue3")) +
+  scale_linetype_manual(values = c("Ideal" = "solid",
+                                   "Flexible calibration" = "dashed")) +
+  labs(x = "Predicted Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence",
+       color = "Legend", linetype = "Legend") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r}
+num_cuts <- 10  # Number of bins for calibration
+
+# Add Loess Fit for Flexible Calibration Line
+loess_fit <- loess(observed ~ predicted, data = calib_combined_enet, span = 0.75)
+calib_combined_enet$loess_pred <- predict(loess_fit, calib_combined_enet$predicted)
+
+# Plot Calibration Curve with Error Bars
+calib_error_bar_enet = ggplot(calib_combined_enet) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
+                    ymax = observed + 1.96 * se),
+                colour="black", width=.01)+
+  geom_point(aes(x = predicted, y = observed)) +
+  labs(x = "Expected Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence") +
+  #       title = "Calibration Plot for Elastic Net Model with Error Bars"
+  theme_minimal()
+
+
+# Plot Calibration Curve with Loess
+calib_combined_enet <- calib_combined_enet %>%
+  mutate(loess_ci_lower = loess_pred - 1.96 * sd(loess_pred),
+         loess_ci_upper = loess_pred + 1.96 * sd(loess_pred))
+
+calib_loess_enet = ggplot(calib_combined_enet, aes(x = predicted, y = observed)) +
+  # Flexible calibration (Loess)
+  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
+  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "red",
+                                "Flexible calibration" = "slateblue3")) +
+  scale_linetype_manual(values = c("Ideal" = "solid",
+                                   "Flexible calibration" = "dashed")) +
+  labs(x = "Predicted Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence",
+       color = "Legend", linetype = "Legend") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r, fig.width = 10, fig.height = 6, out.width="90%", fig.align='center'}
+
+plots_enet = arrangeGrob(
+  calib_error_bar_enet, calib_loess_enet,  ROC_enet,
+  ncol = 3,
+  top = textGrob("Elastic Net Regression",
+                 gp = gpar(fontface = "bold", fontsize = 14)
+))
+
+plots_lasso = arrangeGrob(
+  calib_error_bar_lasso, calib_loess_lasso, ROC_lasso,
+  ncol = 3,
+  top = textGrob("Lasso Regression",
+                 gp = gpar(fontface = "bold", fontsize = 14)
+))
+
+# Bold the main title
+main_title <- textGrob(
+  "Figure 2: Calibration Plots with Error Bars and LOESS and ROC Curves (Moderator Effects)",
+  gp = gpar(fontsize = 16)
+)
+
+# Arrange everything with the bold title
+grid.arrange(
+  plots_lasso,
+  plots_enet,
+  nrow = 2,
+  top = main_title
+)
+```
+
+
 
 ### Calibration Plots (Left Panel)
 
 **Lasso Model** The calibration plot shows that the Lasso model’s predicted probabilities generally align with the observed smoking abstinence rates, but there is noticeable variability, especially at higher probability estimates. The model tends to slightly underpredict abstinence at lower probabilities and demonstrates a wider spread of actual values as probabilities increase.
 
-**Stepwise Model** This model’s calibration plot shows a pretty good alignment with the ideal calibration line, suggesting that it produces probability estimates that can reflect actual abstinence outcomes across most probability ranges. The error bars indicate stable estimates with less variability, making the Stepwise model the most reliable in terms of calibration.
-
-**Best Subset Model** The calibration plot for the Best Subset model reveals a greater discrepancy from the ideal line and wider error bars compared to the other models. This model demonstrates higher variability and less reliable probability estimates, particularly at the extreme ends of the probability range.
+**Elastic Model**
 
 ### LOESS-Smoothing Calibration Curves (Middle Panel)
 
 **Lasso Model** The LOESS curve for the Lasso model shows underprediction of abstinence at lower probabilities, with the curve staying below the ideal line at the low end. The model’s predictions improve slightly as probabilities increase but still demonstrate some deviation, indicating inconsistencies in predicted abstinence probability across ranges.
 
-**Stepwise Model** The Stepwise model’s LOESS curve stays close to the ideal line, suggesting a high degree of calibration accuracy. The curve remains close to the 45-degree line across the range of probabilities, indicating that predicted probabilities are well-calibrated and reflective of actual abstinence outcomes.
-
-**Best Subset Model** The LOESS curve for the Best Subset model deviates from the ideal line, particularly at the lower and upper probability ranges, suggesting substantial miscalibration. The curve shows greater fluctuations, indicating that the model’s predictions are not consistent with observed abstinence probabilities.
-
+**Elastic Model** 
 
 ### ROC Curves (Right Panel)
 
 **Lasso Model** The ROC curve for the Lasso model yields an AUC of 0.74, indicating that this model has the best discrimination ability among the three models. It suggests that the Lasso model can effectively distinguish between abstinent and non-abstinent individuals.
 
-**Stepwise Model** The Stepwise model’s ROC curve has an AUC of 0.73, very close to the Lasso model. While slightly lower, this AUC still represents good discrimination, indicating that the Stepwise model can differentiate between abstinent and non-abstinent cases with reasonable accuracy.
+**Elastic Model**
 
-**Best Subset Model** The Best Subset model has an AUC of 0.71, the lowest among the three models. This suggests that it has the weakest discrimination capability, potentially leading to more misclassification of abstinence status.
-
-```{r}
-# Roc/Auc
-predicted_prob_Lasso <- predict(Lasso_model,
-                                newx = as.matrix(test_variables_dummy_include),
-                                s = "lambda.min", type = "response")
-
-# Convert predictions to numeric if needed (glmnet returns a matrix)
-predicted_prob_Lasso <- as.numeric(predicted_prob_Lasso)
-
-# Plot ROC and calculate AUC
-# Generate ROC object
-roc_obj <- roc(test_outcome, predicted_prob_Lasso)
-
-# Convert the ROC object to a data frame for ggplot2
-roc_data <- data.frame(
-  Specificity = rev(roc_obj$specificities),
-  Sensitivity = rev(roc_obj$sensitivities)
-)
-
-# Calculate the AUC
-auc_value <- auc(roc_obj)
-
-# Plot ROC curve with ggplot2
-ROC_Lasso = ggplot(roc_data, aes(x = 1-Specificity, y = Sensitivity)) +
-  geom_line(color = "slateblue3", size = 1) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
-  annotate("text", x = 0.8, y = 0.2, label = paste("AUC =", 
-  round(auc_value, 2)), 
-  size = 5, color = "Black") +
-  labs(
-    x = "1 - Specificity",
-    y = "Sensitivity"
-  ) +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5), 
-        plot.subtitle = element_text(hjust = 0.5))
-```
-
-```{r, fig.width = 12, fig.height = 4}
-# Calibration Plots
-num_cuts <- 10  # Number of bins for calibration
-
-calib_data <- data.frame(
-  prob = predicted_prob_Lasso,  # predicted probabilities
-  # binning into `num_cuts` groups
-  bin = cut(predicted_prob_Lasso, breaks = num_cuts),  
-  # observed values (abst outcome in test data)
-  class = as.numeric(test_outcome)-1  
-)
-
-calib_data <- calib_data %>%
-  group_by(bin) %>%
-  summarise(
-    observed = mean(class),  
-    predicted = mean(prob),  
-    se = sqrt(observed * (1 - observed) / n())  # Standard error
-  )
-
-# Add Loess Fit for Flexible Calibration Line
-loess_fit <- loess(observed ~ predicted, data = calib_data, span = 0.75)
-calib_data$loess_pred <- predict(loess_fit, calib_data$predicted)
-
-# Plot Calibration Curve with Error Bars
-calib_error_bar_Lasso = ggplot(calib_data) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
-  geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
-                    ymax = observed + 1.96 * se),
-                colour="black", width=.01)+
-  geom_point(aes(x = predicted, y = observed)) +
-  labs(x = "Expected Probability of Smoking Abstinence",
-       y = "Actual Smoking Abstinence") +
-  theme_minimal()
-
-
-# Plot Calibration Curve with Loess
-calib_data <- calib_data %>%
-  mutate(loess_ci_lower = loess_pred - 1.96 * sd(loess_pred),
-         loess_ci_upper = loess_pred + 1.96 * sd(loess_pred))
-
-calib_loess_Lasso = ggplot(calib_data, aes(x = predicted, y = observed)) +
-  # Flexible calibration (Loess)
-  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
-  geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), 
-              alpha = 0.2, fill = "grey") +
-  geom_abline(intercept = 0, slope = 1, color = "red") + # Perfect calibration line
-  labs(x = "Predicted Probability of Smoking Abstinence",
-       y = "Actual Smoking Abstinence") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-```
-
-```{r}
-# ROC/AUC
-predicted_prob_logistic <- predict(logistic_model,
-                                newdata = test_data,
-                                type = "response")
-
-# Convert predictions to numeric if needed (glmnet returns a matrix)
-predicted_prob_logistic <- as.numeric(predicted_prob_logistic)
-
-# Plot ROC and calculate AUC
-# Generate ROC object
-roc_obj <- roc(test_outcome, predicted_prob_logistic)
-
-# Convert the ROC object to a data frame for ggplot2
-roc_data <- data.frame(
-  Specificity = rev(roc_obj$specificities),
-  Sensitivity = rev(roc_obj$sensitivities)
-)
-
-# Calculate the AUC
-auc_value <- auc(roc_obj)
-
-# Plot ROC curve with ggplot2
-ROC_step = ggplot(roc_data, aes(x = 1-Specificity, y = Sensitivity)) +
-  geom_line(color = "slateblue3", size = 1) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
-  annotate("text", x = 0.8, y = 0.2, label = paste("AUC =", 
-                                                   round(auc_value, 2)), 
-           size = 5, color = "Black") + labs(
-    x = "1 - Specificity",
-    y = "Sensitivity"
-  ) +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
-```
-
-```{r, fig.width = 12, fig.height = 4}
-# Calibration Plots
-num_cuts <- 10  # Number of bins for calibration
-
-calib_data <- data.frame(
-  prob = predicted_prob_logistic,  # predicted probabilities
-  # binning into `num_cuts` groups
-  bin = cut(predicted_prob_logistic, breaks = num_cuts),  
-  # observed values (abst outcome in test data)
-  class = as.numeric(test_outcome)-1  
-)
-
-calib_data <- calib_data %>%
-  group_by(bin) %>%
-  summarise(
-    observed = mean(class),  
-    predicted = mean(prob),  
-    se = sqrt(observed * (1 - observed) / n())  # Standard error
-  )
-
-# Add Loess Fit for Flexible Calibration Line
-loess_fit <- loess(observed ~ predicted, data = calib_data, span = 0.75)
-calib_data$loess_pred <- predict(loess_fit, calib_data$predicted)
-
-# Plot Calibration Curve with Error Bars
-calib_error_bar_step = ggplot(calib_data) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
-  geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
-                    ymax = observed + 1.96 * se),
-                colour="black", width=.01)+
-  geom_point(aes(x = predicted, y = observed)) +
-  labs(x = "Expected Probability of Smoking Abstinence",
-       y = "Actual Smoking Abstinence") +
-  theme_minimal()
-
-
-# Plot Calibration Curve with Loess
-calib_data <- calib_data %>%
-  mutate(loess_ci_lower = loess_pred - 1.96 * sd(loess_pred),
-         loess_ci_upper = loess_pred + 1.96 * sd(loess_pred))
-
-calib_loess_step = ggplot(calib_data, aes(x = predicted, y = observed)) +
-  # Flexible calibration (Loess)
-  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
-  geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), 
-              alpha = 0.2,
-              fill = "grey") +
-  geom_abline(intercept = 0, slope = 1, color = "red") +  
-  # Perfect calibration line
-  labs(x = "Predicted Probability of Smoking Abstinence",
-       y = "Actual Smoking Abstinence") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-```
-
-```{r}
-# ROC/AUC
-predict_best_subset <- function(test_data = test_variables_dummy_include,
-                                best_subset_coefs) {
-  intercept <- best_subset_coefs[1]
-  selected_vars <- names(best_subset_coefs)[-1]
- 
-  test_subset <- test_data[, selected_vars, drop = FALSE]  
- 
-  # Calculate predictions by multiplying test data with coefficients
-  # Matrix multiplication for predictors + intercept
-  predictions <- intercept + as.matrix(test_subset) %*% best_subset_coefs[selected_vars]
- 
-  return(predictions)
-}
-
-predicted_prob_best_subset <- predict_best_subset(test_data = test_variables_dummy_include,
-                                   best_subset_coefs)
-# Convert predictions to numeric
-predicted_prob_best_subset <- as.numeric(predicted_prob_best_subset) -1
-
-# Plot ROC and calculate AUC
-# Generate ROC object
-roc_obj <- roc(test_outcome, predicted_prob_best_subset)
-
-# Convert the ROC object to a data frame for ggplot2
-roc_data <- data.frame(
-  Specificity = rev(roc_obj$specificities),
-  Sensitivity = rev(roc_obj$sensitivities)
-)
-
-# Calculate the AUC
-auc_value <- auc(roc_obj)
-
-# Plot ROC curve with ggplot2
-ROC_best_subset = ggplot(roc_data, aes(x = 1-Specificity, y = Sensitivity)) +
-  geom_line(color = "slateblue3", size = 1) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
-  annotate("text", x = 0.8, y = 0.2,
-           label = paste("AUC =", round(auc_value, 2)), size = 5, color = "Black") +
-  labs(
-    x = "1 - Specificity",
-    y = "Sensitivity"
-  ) +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5))
-```
-
-```{r, fig.width = 12, fig.height = 4}
-# Calibration plots
-num_cuts <- 10  # Number of bins for calibration
-
-calib_data <- data.frame(
-  prob = predicted_prob_best_subset,  # predicted probabilities
-  # binning into `num_cuts` groups
-  bin = cut(predicted_prob_logistic, breaks = num_cuts),  
-  # observed values (abst outcome in test data)
-  class = as.numeric(test_outcome)-1  
-)
-
-calib_data <- calib_data %>%
-  group_by(bin) %>%
-  summarise(
-    observed = mean(class),  
-    predicted = mean(prob),  
-    se = sqrt(observed * (1 - observed) / n())  # Standard error
-  )
-
-# Add Loess Fit for Flexible Calibration Line
-loess_fit <- loess(observed ~ predicted, data = calib_data, span = 0.75)
-calib_data$loess_pred <- predict(loess_fit, calib_data$predicted)
-
-# Plot Calibration Curve with Error Bars
-calib_error_bar_bss = ggplot(calib_data) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
-  geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
-                    ymax = observed + 1.96 * se),
-                colour="black", width=.01)+
-  geom_point(aes(x = predicted, y = observed)) +
-  labs(x = "Expected Probability of Smoking Abstinence",
-       y = "Actual Smoking Abstinence") +
-  theme_minimal()
- 
-
-# Plot Calibration Curve with Loess
-calib_data <- calib_data %>%
-  mutate(loess_ci_lower = loess_pred - 1.96 * sd(loess_pred),
-         loess_ci_upper = loess_pred + 1.96 * sd(loess_pred))
-
-calib_loess_bss = ggplot(calib_data, aes(x = predicted, y = observed)) +
-  # Flexible calibration (Loess)
-  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
-  geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
-  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
-  labs(x = "Predicted Probability of Smoking Abstinence",
-       y = "Actual Smoking Abstinence") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-
-```
-
-```{r, fig.width = 12, fig.height =12, out.width = "80%", fig.align = "center"}
-# Create the 3x3 plot "matrix"
-plots_step = arrangeGrob(
-  calib_error_bar_step, calib_loess_step, ROC_step,
-  ncol = 3,
-  left = textGrob("Stepwise Selection", rot = 90,
-                 gp = gpar(fontface = "bold", fontsize = 18)
-))
-
-plots_Lasso = arrangeGrob(
-  calib_error_bar_Lasso, calib_loess_Lasso, ROC_Lasso,
-  ncol = 3,
-  left = textGrob("Lasso Regression", rot = 90,
-                 gp = gpar(fontface = "bold", fontsize = 18)
-))
-
-plots_bss = arrangeGrob(
-  calib_error_bar_bss, calib_loess_bss, ROC_best_subset,
-  ncol = 3,
-  left = textGrob("Best Subset Selection", rot = 90,
-                 gp = gpar(fontface = "bold", fontsize = 18)
-))
-
-# Bold the main title
-main_title <- textGrob(
-  "Calibration Plots with Error Bars and LOESS - ROC Curves (for the 3 Selection Models)",
-  gp = gpar(fontface = "bold", fontsize = 20)
-)
-
-# Arrange everything with the bold title
-grid.arrange(
-  plots_Lasso,
-  plots_step,
-  plots_bss,
-  nrow = 3,
-  top = main_title
-)
-```
 
 For the second objective, we explored baseline characteristic as potential predictors. Overall, we followed similar analysis procedure as in objective one, but due to lower model complexity, we could employ exhaustive replacement in best subset selection. Table 5 compares the coefficients of variables selected by the three different modeling approaches and their corresponding ORs. On this approach, we observed that three variables (ftcd_score, mde_curr and NMR) were present in all three models. As previously discussed, FTCD score and NMR could be potentional predictors for predicting the outcome.  Also, the OR of mde_curr is less than 1 in all three methods, meaning mde_curr has a similar behavior with ftcd_score. This means that participants with current MDD would have a lower success rate of smoking abstinence than those with past MDD. Finally, Var has a consistently >1 OR in all three methods used, while BA did not show a positive impact on abstinence, which is consistent with the findings from the original study (@hitsman2023efficacy).
 
@@ -1179,13 +1072,6 @@ predictor_names <- c("Var", "BA", "age_ps", "sex_ps", "inc", "edu_merged", "race
                      "crv_total_pq1", "hedonsum_n_pq1", "hedonsum_y_pq1",
                      "shaps_score_pq1", "otherdiag", "antidepmed", "mde_curr",
                      "NMR", "Only.Menthol", "readiness")
-
-predictors <- data_mice[, predictor_names]
-# for Lasso (to break down factors with >2 levels)
-predictors_dummy <- model.matrix(~ 0 + ., data = predictors)
-# remove the extra reference group
-predictors_dummy <- predictors_dummy[, -which(colnames(predictors_dummy) =="Var0")]
-
 
 # Lasso Regression
 # To identify the potential interaction terms for moderator effects
@@ -1200,165 +1086,484 @@ train_predictors_dummy_include_names <- c(
   "readiness"
 )
 
-train_predictors_dummy <- predictors_dummy[train_index, ]
-test_predictors_dummy <- predictors_dummy[-train_index, ]
+# Helper function to perform model fitting
+ fit_models <- function(data) {
+   # Define predictors and outcome
+   outcome <- data$abst
+   
+   predictors <- data[, predictor_names]
+   # for Lasso (to break down factors with >2 levels)
+   predictors_dummy <- model.matrix( ~ 0 + ., data = predictors)
+   # remove the extra reference group
+   predictors_dummy <- predictors_dummy[, -which(colnames(predictors_dummy) ==
+                                                   "Var0")]
+   
+ 
 
-train_predictors_dummy_include =
-  train_predictors_dummy[,train_predictors_dummy_include_names]
-test_predictors_dummy_include =
-  test_predictors_dummy[,train_predictors_dummy_include_names]
+  # Split into train and test sets
+   set.seed(58)
+   train_index <- createDataPartition(outcome, p = 0.7, list = FALSE)
+   train_data <- data[train_index, ]
+   train_outcome = train_data$abst
+   test_data <- data[-train_index, ]
+   test_outcome = test_data$abst
+   
+   train_predictors_dummy <- predictors_dummy[train_index, ]
+   test_predictors_dummy <- predictors_dummy[-train_index, ]
+   
+   train_predictors_dummy_include =
+     train_predictors_dummy[, train_predictors_dummy_include_names]
+   test_predictors_dummy_include =
+     test_predictors_dummy[, train_predictors_dummy_include_names]
 
-# Initialize penalty factors to 1 for all variables
-penalty_factors <- rep(1, ncol(train_predictors_dummy_include))
+  # Set penalty factors to enforce keeping Var and BA
+  # Initialize penalty factors to 1 for all variables
+  penalty_factors <- rep(1, ncol(train_predictors_dummy_include))
 
-# Identify columns corresponding exactly to "Var1" and "BA1" (not their interactions)
-var1_col <- grep("^Var1$", colnames(train_predictors_dummy_include))
-ba1_col <- grep("^BA1$", colnames(train_predictors_dummy_include))
+  # Identify columns corresponding exactly to "Var1" and "BA1" (not their interactions)
+  var1_col <- grep("^Var1$", colnames(train_predictors_dummy_include))
+  ba1_col <- grep("^BA1$", colnames(train_predictors_dummy_include))
+ 
+  penalty_factors[c(var1_col, ba1_col)] <- 0
+  names(penalty_factors) <- colnames(train_predictors_dummy_include)
 
-penalty_factors[c(var1_col, ba1_col)] <- 0
-names(penalty_factors) <- colnames(train_predictors_dummy_include)
+  # Fit Elastic Net model
+  enet_model <- cv.glmnet(
+    as.matrix(train_predictors_dummy_include),
+    train_outcome,
+    penalty.factor = penalty_factors,
+    alpha = 0.5,
+    family = "binomial",
+    nfold = 10
+  )
 
-set.seed(58)
-Lasso_model <- cv.glmnet(as.matrix(train_predictors_dummy_include), train_outcome,
-                         penalty.factor = penalty_factors,
-                         alpha = 1, family = "binomial")
+  # Fit Lasso model (alpha = 1)
+  lasso_model <- cv.glmnet(
+    as.matrix(train_predictors_dummy_include),
+    train_outcome,
+    penalty.factor = penalty_factors,
+    alpha = 1,
+    family = "binomial",
+    nfold = 10
+  )
 
-# Extract coefficients at the optimal lambda (best_lambda)
-best_lambda_Lasso <- Lasso_model$lambda.min
-#remove intercept
-optimal_coefs_Lasso <- as.numeric(coef(Lasso_model, s = best_lambda_Lasso)[-1])
-coef_names_Lasso <- rownames(coef(Lasso_model, s = best_lambda_Lasso))[-1]  
-
-pred_result_table_Lasso <- data.frame(
-  variable = coef_names_Lasso,
-  Coefficient = optimal_coefs_Lasso
-) %>%
-  filter(Coefficient != 0)
+  list(
+    elastic_net = enet_model,
+    lasso = lasso_model
+  )
+}
 ```
 
 ```{r}
-# Logistic Regression
-
-# Full formula for main effects and interactions
-full_formula <- as.formula(paste("abst ~", main_effects))
-
-# Define scope with `Var` and `BA` as forced terms in the main model
-scope_list <- list(
-  lower = as.formula("abst ~ Var + BA"),  # Minimal model with controlled terms
-  upper = full_formula                    # Full model with all main terms
-)
-
-# Fit logistic regression model with stepwise selection
-set.seed(58)
-predictor_logistic_model <- step(
-  glm(formula = abst ~ Var + BA, data = train_data, family = "binomial"),
-  scope = scope_list,
-  direction = "both",
-  trace = 0
-)
+# Fit models across imputed datasets
+aim2_results <- list()
+for (i in 1:5) {
+  dataset <- complete(data_mice, action = i)
+  aim2_results[[i]] <- fit_models(dataset)
+}
 ```
 
+
+
 ```{r}
-# Best subset selection
+# Initialize lists to store coefficients for Elastic Net and Lasso
+elastic_net_coefs <- lapply(aim2_results, function(res) coef(res$elastic_net, s = res$elastic_net$lambda.min))
+lasso_coefs <- lapply(aim2_results, function(res) coef(res$lasso, s = res$lasso$lambda.min))
 
-# Run best subset selection with regsubsets
-best_subset_model_pred <- regsubsets(
-  y = train_outcome, x = train_predictors_dummy_include,
-  force.in = c("Var1", "BA1"), nbest = 1, 
-  nvmax = 100,  # Adjust this based on how many variables you want to consider
-  method = "seq", force.out = NULL,
-  really.big=T
-)
 
-# Summarize results
-best_subset_summary <- summary(best_subset_model_pred)
-best_subset_summary = summary(best_subset_model_pred)
-cp_min = which.min(best_subset_summary$cp) # min is 10
-pred_best_subset_coefs = coef(best_subset_model_pred, cp_min)
-best_subset_names_pred = names(coef(best_subset_model_pred, cp_min))
+# Function to process coefficients for averaging and selection count
+process_coefs <- function(coefs_list) {
+  # Combine coefficients into a matrix
+  coefs_matrix <- do.call(cbind, lapply(coefs_list, function(coef) as.numeric(coef)))
+  rownames(coefs_matrix) <- rownames(coefs_list[[1]])
+ 
+  # Count non-zero selections for each variable
+  selection_counts <- rowSums(coefs_matrix != 0)
+ 
+  # Compute the average of coefficients only when selected (non-zero)
+  averaged_coefs <- rowSums(coefs_matrix) / selection_counts
+  averaged_coefs[is.na(averaged_coefs)] <- 0  # Handle cases where selection_counts is 0
+ 
+  # Create result table
+  result_table <- data.frame(
+    variable = rownames(coefs_matrix),
+        SelectionTimes = selection_counts,
+    AverageCoefficient = averaged_coefs
+  ) %>%
+    filter(SelectionTimes > 0)  # Keep only variables selected at least once
+ 
+  return(result_table)
+}
+
+# Process Elastic Net and Lasso coefficients
+result_table_enet <- process_coefs(elastic_net_coefs)
+result_table_lasso <- process_coefs(lasso_coefs)
+
+# Display the results
+# result_table_enet
+# result_table_lasso
+
 ```
 
+
 ```{r}
-# Create a table with coefficients from Logistic, Lasso, Best Subset Selection
+# Summary table of coef
+large_threshold <- 100
 
-# Stepwise coefficients
-stepwise_coefs <- coef(predictor_logistic_model)
-stepwise_df <- data.frame(
-  variable = names(stepwise_coefs),
-  `Stepwise` = as.numeric(stepwise_coefs)
-)
+# Calculate OR for each coefficient for each method and rename columns correctly
+enet_df <- result_table_enet %>%
+  rename(`Selection Times` = SelectionTimes) %>%
+  rename(`Elastic Net Average Coef` = AverageCoefficient) %>%
+  mutate(`Elastic Net Average OR` = exp(`Elastic Net Average Coef`))
 
-# Lasso coefficients
-Lasso_df <- pred_result_table_Lasso %>%
-  rename(`Lasso` = Coefficient)
+lasso_df <- result_table_lasso %>%
+  rename(`Selection Times` = SelectionTimes) %>%
+  rename(`Lasso Average Coef` = AverageCoefficient) %>%
+  mutate(`Lasso OR` = exp(`Lasso Average Coef`))
 
-# Best subset coefficients
-best_subset_df <- data.frame(
-  variable = names(pred_best_subset_coefs),
-  `Best Subset` = as.numeric(pred_best_subset_coefs)
-)
 
-# Merge all into one table based on variable names
-combined_df <- full_join(Lasso_df, stepwise_df, by = "variable") %>%
-  full_join(best_subset_df, by = "variable") %>%
-  mutate(across(where(is.numeric), ~ round(.x, 4)))
+
+# Merge all data frames based on variable names
+combined_df <- full_join(lasso_df, enet_df, by = "variable") %>%
+  mutate(across(where(is.numeric), ~ round(.x, 4))) %>%
+  mutate(across(where(is.numeric), ~ ifelse(as.numeric(.) > large_threshold, "*", .)))
 
 # Remove the intercept row
 combined_df <- combined_df[combined_df$variable != "(Intercept)", ]
 
-# Replace NA values with an empty space
-combined_df[is.na(combined_df)] <- " "
+# Standardize interaction terms by sorting them alphabetically
+combined_df <- combined_df %>%
+  mutate(
+    variable = sapply(variable, function(x) {
+      terms <- unlist(strsplit(x, ":"))
+      if (length(terms) > 1) {
+        paste(sort(terms), collapse = ":")
+      } else {
+        x
+      }
+    })
+  )
 
-colnames(combined_df) <- gsub("Best.Subset", "Best Subset", colnames(combined_df))
+# Combine rows with the same standardized interaction term names
+combined_df <- combined_df %>%
+  group_by(variable) %>%
+  summarize(across(everything(), ~ ifelse(is.numeric(.), sum(as.numeric(.), na.rm = TRUE), .))) %>%
+  ungroup()
 
-# Change "variable" to "Variables" in the combined_df
-colnames(combined_df)[colnames(combined_df) == "variable"] <- "Variables"
+# Replace zeroes and any remaining NAs with an empty space for readability
+combined_df <- combined_df %>%
+  mutate(across(where(is.numeric), ~ ifelse(. == 0, "", .))) %>%
+  replace(is.na(.), " ")
+
+# Display the final combined table with grouped headers
+combined_df %>%
+  kable(row.names = F,
+        col.names = c("Variable", "Selection Times","Average Coef", "OR", "Selection Times", "Average Coef", "OR"),
+        caption = "Summary of Average Coefficients and Odds Ratios for Potential Predictor Effects across Model Selection Methods") %>%
+  add_header_above(c(" " = 1, "Lasso" = 3, "Elastic Net" = 3)) %>%
+  kable_styling(full_width = F, position = "center", font_size = 9)
+
+```
+
+
+```{r}
+# Initialize lists to store results for each imputation
+roc_results_enet <- list()
+calib_results_enet <- list()
+auc_values_enet <- list()
+
+roc_results_lasso <- list()
+calib_results_lasso <- list()
+auc_values_lasso <- list()
+
+num_cuts <- 10  # Number of bins for calibration
+
+for (i in 1:5) {
+  dataset <- complete(data_mice, action = i)
+ 
+  # Split the dataset into training and test sets
+  set.seed(58)
+  train_index <- createDataPartition(dataset$abst, p = 0.7, list = FALSE)
+  train_data <- dataset[train_index, ]
+  test_data <- dataset[-train_index, ]
+ 
+  # Prepare predictors and outcome for test set
+  test_variables_dummy <- model.matrix(~ 0 + ., data = test_data[, predictor_names])
+  test_variables_dummy <- test_variables_dummy[, -which(colnames(test_variables_dummy) == "Var0")]
+  test_variables_dummy_full_interactions <- model.matrix(~ . ^ 2, data = as.data.frame(test_variables_dummy))
+  test_variables_dummy_include <- test_variables_dummy_full_interactions[, train_predictors_dummy_include_names]
+  test_outcome <- test_data$abst
+
+  # Predict probabilities for Elastic Net
+  predicted_prob_enet <- as.numeric(predict(aim2_results[[i]]$elastic_net,
+                                            newx = as.matrix(test_variables_dummy_include),
+                                            s = "lambda.min", type = "response"))
+ 
+  # Predict probabilities for Lasso
+  predicted_prob_lasso <- as.numeric(predict(aim2_results[[i]]$lasso,
+
+                                             newx = as.matrix(test_variables_dummy_include),
+                                             s = "lambda.min", type = "response"))
+
+  # Compute ROC and AUC for Elastic Net
+  roc_enet <- roc(test_outcome, predicted_prob_enet)
+  roc_results_enet[[i]] <- data.frame(
+    Specificity = rev(roc_enet$specificities),
+    Sensitivity = rev(roc_enet$sensitivities)
+  )
+  auc_values_enet[[i]] <- auc(roc_enet)  # Store AUC separately
+ 
+  # Compute ROC and AUC for Lasso
+  roc_lasso <- roc(test_outcome, predicted_prob_lasso)
+  roc_results_lasso[[i]] <- data.frame(
+    Specificity = rev(roc_lasso$specificities),
+    Sensitivity = rev(roc_lasso$sensitivities)
+  )
+  auc_values_lasso[[i]] <- auc(roc_lasso)  # Store AUC separately
+
+ 
+  # Calibration for Elastic Net
+  calib_data_enet <- data.frame(
+    prob = predicted_prob_enet,
+    bin = cut(predicted_prob_enet, breaks = num_cuts),
+    class = as.numeric(test_outcome) - 1
+  )
+  calib_results_enet[[i]] <- calib_data_enet %>%
+    group_by(bin) %>%
+    summarise(
+      observed = mean(class),
+      predicted = mean(prob),
+      se = sqrt(observed * (1 - observed) / n())
+    )
+ 
+  # Calibration for Lasso
+  calib_data_lasso <- data.frame(
+    prob = predicted_prob_lasso,
+    bin = cut(predicted_prob_lasso, breaks = num_cuts),
+    class = as.numeric(test_outcome) - 1
+  )
+  calib_results_lasso[[i]] <- calib_data_lasso %>%
+    group_by(bin) %>%
+    summarise(
+      observed = mean(class),
+      predicted = mean(prob),
+      se = sqrt(observed * (1 - observed) / n())
+    )
+}
+
+
 ```
 
 ```{r}
-# Create a table with OR from the three methods
-# Convert Stepwise coefficients to Odds Ratios
-stepwise_coefs <- coef(predictor_logistic_model)
-stepwise_or <- exp(stepwise_coefs)
-stepwise_df <- data.frame(
-  Variables = names(stepwise_or),
-  `Stepwise OR` = as.numeric(stepwise_or)
+# Extract numeric AUC values from the list of AUC objects
+auc_numeric_enet <- sapply(auc_values_enet, function(x) as.numeric(x))
+auc_numeric_lasso <- sapply(auc_values_lasso, function(x) as.numeric(x))
+
+# Compute the mean AUC
+mean_auc_enet <- mean(auc_numeric_enet)
+mean_auc_lasso <- mean(auc_numeric_lasso)
+
+```
+
+
+```{r}
+# Define a common set of specificity thresholds
+common_specificities <- seq(0, 1, length.out = 100)
+
+# Interpolate sensitivity for each ROC curve at the common specificities
+interp_sensitivities_lasso <- sapply(roc_results_lasso, function(roc_data) {
+  approx(x = roc_data$Specificity, y = roc_data$Sensitivity, xout = common_specificities)$y
+})
+
+# Compute the mean sensitivity across imputations
+mean_sensitivity_lasso <- rowMeans(interp_sensitivities_lasso, na.rm = TRUE)
+
+# Create a data frame for the averaged ROC curve
+mean_roc_lasso <- data.frame(
+  Specificity = common_specificities,
+  Sensitivity = mean_sensitivity_lasso
 )
 
-# Convert Lasso coefficients to Odds Ratios
-Lasso_or_df <- pred_result_table_Lasso %>%
-  mutate(`Lasso OR` = exp(Coefficient)) %>%
-  rename(Variables = variable)  %>%
-  dplyr::select(Variables, `Lasso OR`)
+# Plot the averaged ROC curve
+ROC_lasso = ggplot(mean_roc_lasso, aes(x = 1 - Specificity, y = Sensitivity)) +
+  geom_line(color = "black", size = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
+  annotate("text", x = 0.8, y = 0.2, label = paste("Mean AUC =", round(mean_auc_lasso, 2)), size = 3, color = "Black") +
+  labs(
+    x = "1 - Specificity",
+    y = "Sensitivity"
+  ) +
+  theme_minimal()
 
-# Convert Best subset coefficients to Odds Ratios
-best_subset_or <- exp(pred_best_subset_coefs)
-best_subset_df <- data.frame(
-  Variables = names(best_subset_or),
-  `Best Subset OR` = as.numeric(best_subset_or)
-)
-
-# Merge all into one table based on variable names
-combined_or_df <- full_join(Lasso_or_df, stepwise_df, by = "Variables") %>%
-  full_join(best_subset_df, by = "Variables") %>%
-  mutate(across(where(is.numeric), ~ round(.x, 4)))
-
-# Remove the intercept row
-combined_or_df <- combined_or_df[combined_or_df$Variables != "(Intercept)", ]
-
-# Replace NA values with an empty space
-combined_or_df[is.na(combined_or_df)] <- " "
 ```
 
 ```{r}
-# Combined table for both coef and ORs
-full_df = left_join(combined_df, combined_or_df, by = "Variables")
-kable(full_df, row.names = FALSE, 
-      col.names = c("Variables","Lasso", "Stepwise", "Best Subset",
-                     "Lasso OR", "Stepwise OR", "Best Subset OR"),
-      caption = "Summary of Coefficients and Odds Ratios across 3 
-Selection Methods (for Predictors)") 
+# Define a common set of specificity thresholds
+common_specificities <- seq(0, 1, length.out = 100)
 
+# Interpolate sensitivity for each ROC curve at the common specificities
+interp_sensitivities_enet <- sapply(roc_results_enet, function(roc_data) {
+  approx(x = roc_data$Specificity, y = roc_data$Sensitivity, xout = common_specificities)$y
+})
+
+# Compute the mean sensitivity across imputations
+mean_sensitivity_enet <- rowMeans(interp_sensitivities_enet, na.rm = TRUE)
+
+# Create a data frame for the averaged ROC curve
+mean_roc_enet <- data.frame(
+  Specificity = common_specificities,
+  Sensitivity = mean_sensitivity_enet
+)
+
+# Plot the averaged ROC curve
+ROC_enet = ggplot(mean_roc_enet, aes(x = 1 - Specificity, y = Sensitivity)) +
+  geom_line(color = "black", size = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey") +
+  annotate("text", x = 0.8, y = 0.2, label = paste("Mean AUC =", round(mean_auc_enet, 2)), size = 3, color = "Black") +
+  labs(
+    x = "1 - Specificity",
+    y = "Sensitivity"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+# Combine Calibration Results Across Imputations
+calib_combined_enet <- do.call(rbind, calib_results_enet) %>%
+  group_by(bin) %>%
+  summarise(
+    observed = mean(observed),
+    predicted = mean(predicted),
+    se = sqrt(sum(se^2) / n())
+  )
+
+calib_combined_lasso <- do.call(rbind, calib_results_lasso) %>%
+  group_by(bin) %>%
+  summarise(
+    observed = mean(observed),
+    predicted = mean(predicted),
+    se = sqrt(sum(se^2) / n())
+  )
+
+```
+
+```{r}
+num_cuts <- 10  # Number of bins for calibration
+
+# Add Loess Fit for Flexible Calibration Line
+loess_fit <- loess(observed ~ predicted, data = calib_combined_lasso, span = 0.75)
+calib_combined_lasso$loess_pred <- predict(loess_fit, calib_combined_lasso$predicted)
+
+# Plot Calibration Curve with Error Bars
+calib_error_bar_lasso = ggplot(calib_combined_lasso) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
+                    ymax = observed + 1.96 * se),
+                colour="black", width=.01)+
+  geom_point(aes(x = predicted, y = observed)) +
+  labs(x = "Expected Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence") +
+  #       title = "Calibration Plot for Elastic Net Model with Error Bars"
+  theme_minimal()
+
+
+# Plot Calibration Curve with Loess
+calib_combined_lasso <- calib_combined_lasso %>%
+  mutate(loess_ci_lower = loess_pred - 1.96 * sd(loess_pred),
+         loess_ci_upper = loess_pred + 1.96 * sd(loess_pred))
+
+calib_loess_lasso = ggplot(calib_combined_lasso, aes(x = predicted, y = observed)) +
+  # Flexible calibration (Loess)
+  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
+  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "red",
+                                "Flexible calibration" = "slateblue3")) +
+  scale_linetype_manual(values = c("Ideal" = "solid",
+                                   "Flexible calibration" = "dashed")) +
+  labs(x = "Predicted Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence",
+       color = "Legend", linetype = "Legend") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r}
+num_cuts <- 10  # Number of bins for calibration
+
+# Add Loess Fit for Flexible Calibration Line
+loess_fit <- loess(observed ~ predicted, data = calib_combined_enet, span = 0.75)
+calib_combined_enet$loess_pred <- predict(loess_fit, calib_combined_enet$predicted)
+
+# Plot Calibration Curve with Error Bars
+calib_error_bar_enet = ggplot(calib_combined_enet) +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
+                    ymax = observed + 1.96 * se),
+                colour="black", width=.01)+
+  geom_point(aes(x = predicted, y = observed)) +
+  labs(x = "Expected Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence") +
+  #       title = "Calibration Plot for Elastic Net Model with Error Bars"
+  theme_minimal()
+
+
+# Plot Calibration Curve with Loess
+calib_combined_enet <- calib_combined_enet %>%
+  mutate(loess_ci_lower = loess_pred - 1.96 * sd(loess_pred),
+         loess_ci_upper = loess_pred + 1.96 * sd(loess_pred))
+
+calib_loess_enet = ggplot(calib_combined_enet, aes(x = predicted, y = observed)) +
+  # Flexible calibration (Loess)
+  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
+  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "red",
+                                "Flexible calibration" = "slateblue3")) +
+  scale_linetype_manual(values = c("Ideal" = "solid",
+                                   "Flexible calibration" = "dashed")) +
+  labs(x = "Predicted Probability of Smoking Abstinence",
+       y = "Actual Smoking Abstinence",
+       color = "Legend", linetype = "Legend") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r, fig.width = 10, fig.height = 6, out.width="90%", fig.align='center'}
+
+plots_enet = arrangeGrob(
+  calib_error_bar_enet, calib_loess_enet,  ROC_enet,
+  ncol = 3,
+  top = textGrob("Elastic Net Regression",
+                 gp = gpar(fontface = "bold", fontsize = 14)
+))
+
+plots_lasso = arrangeGrob(
+  calib_error_bar_lasso, calib_loess_lasso, ROC_lasso,
+  ncol = 3,
+  top = textGrob("Lasso Regression",
+                 gp = gpar(fontface = "bold", fontsize = 14)
+))
+
+# Bold the main title
+main_title <- textGrob(
+  "Figure 2: Calibration Plots with Error Bars and LOESS and ROC Curves (Predictor Effects)",
+  gp = gpar(fontsize = 16)
+)
+
+# Arrange everything with the bold title
+grid.arrange(
+  plots_lasso,
+  plots_enet,
+  nrow = 2,
+  top = main_title
+)
 ```
 
 # Conclusions and Limitations
