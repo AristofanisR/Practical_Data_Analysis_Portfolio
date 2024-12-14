@@ -342,7 +342,7 @@ To handle missing data, the Multiple Imputation by Chained Equations (MICE) meth
 # MICE 
 # Perform MICE imputation
 data_mice <- mice(data, m = 5
-                  , method = "pmm", maxit = 50, seed = 58, printFlag= FALSE)
+                  , method = "pmm", maxit = 50, seed = 815, printFlag= FALSE)
 
 data_mice_4 = complete(data_mice, action = 4)
 
@@ -457,9 +457,17 @@ raincloud = ggplot(data_mice_4, aes(x = race, y = ftcd_score, fill = race)) +
   theme_minimal() +
   scale_fill_manual(values = c("mediumblue","slateblue3", "grey", "palevioletred"))
 
+title <- ggdraw() +
+  draw_label("Figure 1: Mosaic/Raincloud plots for the relationships between education, income, race, and FTCD scores",
+fontface = "bold",
+x = 0, hjust = 0)
+
 
 combined_plot <- plot_grid(heatmap1, heatmap2, ncol = 2, align = "hv")
-combined_plot
+
+
+combined_plot_title <- plot_grid(title, combined_plot, ncol = 1, rel_heights = c(0.1, 1))
+combined_plot_title
 
 #combined_plot <- grid.arrange(mosaic, heatmap, beeswarm, raincloud, ncol = 2)
 #combined_plot
@@ -578,7 +586,7 @@ fit_models <- function(data) {
  
 
   # Split into train and test sets
-  set.seed(58)
+  set.seed(815)
   train_index <- createDataPartition(outcome, p = 0.7, list = FALSE)
   train_data <- data[train_index, ]
   train_outcome = train_data$abst
@@ -758,7 +766,7 @@ for (i in 1:5) {
   dataset <- complete(data_mice, action = i)
  
   # Split the dataset into training and test sets
-  set.seed(58)
+  set.seed(815)
   train_index <- createDataPartition(dataset$abst, p = 0.7, list = FALSE)
   train_data <- dataset[train_index, ]
   test_data <- dataset[-train_index, ]
@@ -1101,7 +1109,7 @@ train_predictors_dummy_include_names <- c(
  
 
   # Split into train and test sets
-   set.seed(58)
+   set.seed(815)
    train_index <- createDataPartition(outcome, p = 0.7, list = FALSE)
    train_data <- data[train_index, ]
    train_outcome = train_data$abst
@@ -1282,7 +1290,7 @@ for (i in 1:5) {
   dataset <- complete(data_mice, action = i)
  
   # Split the dataset into training and test sets
-  set.seed(58)
+  set.seed(815)
   train_index <- createDataPartition(dataset$abst, p = 0.7, list = FALSE)
   train_data <- dataset[train_index, ]
   test_data <- dataset[-train_index, ]
@@ -1553,7 +1561,7 @@ plots_lasso = arrangeGrob(
 
 # Bold the main title
 main_title <- textGrob(
-  "Figure 2: Calibration Plots with Error Bars and LOESS and ROC Curves (Predictor Effects)",
+  "Figure 3: Calibration Plots with Error Bars and LOESS and ROC Curves (Predictor Effects)",
   gp = gpar(fontsize = 16)
 )
 
@@ -1570,7 +1578,7 @@ grid.arrange(
 
 This study underscores the potential benefits of tailored smoking cessation interventions for individuals with Major Depressive Disorder (MDD). Our analysis revealed that baseline characteristics, particularly FTCD score and Nicotine Metabolism Ratio (NMR), significantly impact abstinence outcomes. Higher nicotine dependence was associated with lower cessation success, while a higher NMR indicated a greater likelihood of quitting. These findings suggest that individualized treatments, incorporating both pharmacotherapy and behavioral strategies, may be more effective for this high-risk population.
 
-The use of multiple modeling approaches— Lasso, Stepwise Logistic Regression, and Best Subset Selection— allowed for a robust evaluation of predictive factors, capturing both common and unique predictors across methods. While Behavioral Activation and varenicline showed mixed effects on abstinence rates, variability in predictor selection highlights the complexity of predicting cessation success in individuals with MDD. This suggests that integrating insights from different models can help identify a broader range of influential factors, enhancing the personalization of treatment approaches.
+The use of those two modeling approaches— Lasso and Elastic Net— allowed for a robust evaluation of predictive factors, capturing both common and unique predictors across methods. While Behavioral Activation and varenicline showed mixed effects on abstinence rates, variability in predictor selection highlights the complexity of predicting cessation success in individuals with MDD. This suggests that integrating insights from different models can help identify a broader range of influential factors, enhancing the personalization of treatment approaches.
 
 However, limitations of this study include a moderate sample size and reliance on self-reported smoking data, which may limit generalizability and introduce potential biases. Furthermore, the high number of interaction terms included in the full model for moderator effect exploration could introduce the issue of overfitting. Future research should expand on these findings by employing larger samples, objective measures of smoking, and long-term follow-up. Further exploration of additional predictors, such as genetic markers or psychiatric profiles, could provide deeper insights into treatment responses, ultimately guiding the development of optimized cessation strategies for those with MDD.
 
