@@ -13,18 +13,21 @@ output:
     keep_tex: true
 
 link-citations: yes
+header-include:
+  - "\\usepackage{xcolor}"
 abstract: |
   **Purpose**: This project evaluates the efficacy of smoking cessation treatments among adults with Major Depressive Disorder (MDD), focusing on identifying baseline factors that moderate and predict treatment success. This analysis aims to clarify the role of both behavioral and pharmacological interventions, examining interactions between participant characteristics and treatment components.
 
   **Methods**: Using data from a randomized, placebo-controlled trial, we assessed the effectiveness of Behavioral Activation (BA) and standard treatment (ST), each paired with either varenicline or a placebo, in supporting smoking cessation. Two statistical approaches-- Lasso regression and Elastic Net Regression with 10-fold cross validation-- were employed to identify significant moderators and predictors of abstinence at the end of treatment, based on a sample of 300 adult smokers with current or past MDD.
     
-  **Results**: The findings indicate that specific baseline characteristics, including FTCD score (a measure of nicotine dependence) and Nicotine Metabolism Ratio (NMR), significantly influence treatment outcomes. FTCD score was associated with lower abstinence rates, while a higher NMR was linked to greater likelihood of cessation. These predictors were consistently identified across models, suggesting a robust relationship between these factors and smoking cessation outcomes.
+  **Results**: The findings highlight the significant influence of baseline characteristics, including FTCD score, Nicotine Metabolism Ratio (`NMR`), and demographic factors such as race and income level, on smoking cessation outcomes. FTCD score was consistently associated with lower abstinence rates, while a higher NMR significantly increased the likelihood of cessation. Key moderators, such as menthol use, current depressive episodes (`MDE_curr1`), and raceOther, emerged as significant barriers, reducing the odds of abstinence across both Lasso and Elastic Net models. Positive predictors like income level 3 (`edu_merged3:inc3`) were associated with higher abstinence rates. These results were consistent across imputation datasets and methods, demonstrating a robust relationship between these predictors and smoking cessation outcomes.
 
-  **Conclusions**: This study supports the need for tailored smoking cessation strategies for individuals with MDD, highlighting the potential of combining behavioral and pharmacological treatments based on individual characteristics. By identifying critical predictors and moderators, the findings provide a foundation for developing more personalized and effective cessation programs for this high-risk population.
+  **Conclusions**: This study underscores the importance of tailoring smoking cessation strategies for individuals with MDD by accounting for critical predictors such as nicotine dependence, metabolic rate, and psychosocial factors. The findings support the integration of behavioral and pharmacological treatments, with a focus on addressing key barriers like menthol use and depressive episodes. By identifying consistent predictors and moderators, this study provides a strong foundation for the development of personalized, evidence-based cessation programs for this high-risk population.
+
 bibliography: References.bib
 ---
 
-# Introduction
+# \textcolor{violet}{Introduction}
 
 This project is a collaboration with Dr. George Papandonatos from the Department of Biostatistics at Brown University. This project examines the effectiveness of smoking cessation treatments for adults with major depressive disorder (MDD), a group that encounters unique challenges when trying to quit smoking. People with MDD often smoke more heavily, have a stronger dependence on nicotine, and face more intense withdrawal symptoms than those without MDD. While varenicline, a medication for quitting smoking, has shown promising results, psychological approaches that address depression-related issues, like behavioral activation (BA), might further enhance quit rates for this group.
 
@@ -68,7 +71,7 @@ library(cowplot)
 library(caret)
 ```
 
-# Data Overview
+# \textcolor{violet}{Data Overview}
 
 As shown in Table 1 below, participant characteristics were stratified by four treatment combination-- behavioral activation with placebo (BASC+placebo), standard treatment with placebo (ST+placebo), behavioral activation with varenicline (BASC+varenicline), and standard treatment with varenicline (ST+varenicline)-- and summarized by treatment group in three primary areas: demographics, smoking characteristics, and psychiatric characteristics. 
 
@@ -285,7 +288,7 @@ final_table
 
 Additionally, to facilitate certain analyses, a new variable was created to consolidate education levels. The three lower levels of education (Grade school, Some high school and high school graduate or GED) were combined into a single category representing lower education levels. This aggregation simplifies the education variable, as those three levels contained a small amount of participants, allowing for broader categorical comparisons while retaining essential information on educational background.
 
-## Data Missingness and Imputation
+## \textcolor{violet}{Data Missingness and Imputation}
 
 The missing data analysis involves examining the extent of missingness across variables in the dataset. A summary table was generated (Table 2), listing variables with missing values, the count of missing entries for each variable, and the corresponding percentage relative to the total sample size. For example, the variable with the highest missingness is the variable NMR (7%), followed by the variables crv_total_pq1 (6%) and readiness (5.67%). Variables with no missing values were excluded from this table for clarity. This missingness analysis is a critical step in data preparation, as it helps to address data quality issues and ensure that the dataset is ready for further statistical modeling and interpretation. The total percentage of missingness was around 20%. If we have deleted all the rows with missing data, we might have lost a significant portion of our dataset, which could reduce the statistical power of our analyses and lead to biased estimates.
 
@@ -336,7 +339,11 @@ data <- data %>%
 
 ```
 
-To handle missing data, the Multiple Imputation by Chained Equations (MICE) method was applied. MICE is an iterative process that generates multiple plausible datasets by imputing missing values based on the observed data structure. Here, we used predictive mean matching (PMM) as the imputation method. PMM is advantageous as it imputes realistic values by using observed values from other participants with similar predictive values.
+To handle missing data, the Multiple Imputation by Chained Equations (MICE) method was applied. MICE is an iterative process that generates multiple plausible datasets by imputing missing values based on the observed data structure. We performed five imputations, meaning five separate datasets were created with imputed values. For each imputed dataset, we conducted 10-fold cross-validation to ensure robust model evaluation.
+
+Subsequently, we ran Lasso regression and Elastic Net regression models on each of the five imputed datasets. The results from these models were aggregated by taking the mean of the coefficients across the datasets, providing stable and interpretable parameter estimates that account for uncertainty in the imputed values.
+
+
 
 ```{r}
 # MICE 
@@ -348,7 +355,8 @@ data_mice_4 = complete(data_mice, action = 4)
 
 ```
 
-## Exploration of potential interactions
+## \textcolor{violet}{Exploration of potential interactions}
+
 As part of the Explanatory Data Analysis, we want to examine the relationship between menthol cigarette use and race. We created a contingency table to display the frequencies of menthol and non-menthol use across racial categories, and then performed a Chi-square test to assess whether there is a statistically significant association between race and menthol cigarette use.
 
 The Chi-square test produced a very low p-value, indicating a statistically significant association between race and menthol cigarette use. This result suggests that menthol cigarette usage depends on race, as there appears to be a notable relationship between the two variables.
@@ -455,7 +463,7 @@ raincloud = ggplot(data_mice_4, aes(x = race, y = ftcd_score, fill = race)) +
   coord_flip() +  # Flip coordinates for a horizontal layout
   labs(x = "Race", y = "FTCD Score", title = "Raincloud Plot") +
   theme_minimal() +
-  scale_fill_manual(values = c("mediumblue","slateblue3", "grey", "palevioletred"))
+  scale_fill_manual(values = c("lightblue","slateblue3", "grey", "palevioletred"))
 
 title <- ggdraw() +
   draw_label("Figure 1: Mosaic/Raincloud plots for the relationships between education, income, race, and FTCD scores",
@@ -487,34 +495,33 @@ raincloud
 **Raincloud Plot for FTCD Score by Race** The raincloud plot shows the distribution and density of FTCD scores across racial groups. Non-Hispanic Whites have the highest density around higher FTCD scores, while other groups show a more varied distribution, with Hispanics and Black participants displaying lower scores overall. This visualization highlights potential differences in FTCD scores among racial groups, which may correlate with other socioeconomic factors.
 
 
-# Methods
+# \textcolor{violet}{Methods}
 
-## Data separation and full model selection
+## \textcolor{violet}{Data separation and full model selection}
 
 To assess the model's performance and ensure its generalizability, we divided the data into training and test sets, with 70% of the observations assigned to the training set and 30% to the test set. This split allows us to train the model on one portion of the data and then evaluate its performance on a separate, unseen portion, reducing the risk of overfitting.
 
-We ensured that the variables Var and BA are kept controlled in the model as those variables are crucial for investigating treatment interactions and their effect on abstinence. For objective one, we also added interaction terms between BA and baseline variables to explore potential moderator effects and other interaction terms, e.g., NMR:readiness and income:education, as reasonable covariates. For the second objective of this project, we considered baseline characteristics as potential predictors while keeping BA and Var controlled. Thus, for simplicity, no interaction terms were included in the full models.
+We ensured that the variables Var and BA are kept controlled in the model as those variables are crucial for investigating treatment interactions and their effect on abstinence. For objective one, we also added interaction terms between BA and baseline variables to explore potential moderator effects and other interaction terms, e.g., `NMR:readiness` and `income:education`, as reasonable covariates. We consulted previous literature (@jiloha2010biological, @brown2015factors, @hitsman2003history) to help decide the inclusion of certain interaction terms and covariates. For the second objective of this project, we considered baseline characteristics as potential predictors while keeping BA and Var controlled. Thus, for simplicity, no interaction terms were included in the full models.
 
-## Lasso Regression
+## \textcolor{violet}{Lasso Regression}
 
-In this part of the analysis, we implemented a Lasso regression to identify potential moderators of the treatment effects on smoking abstinence. By using Lasso, we aim to reduce the model to a subset of variables and interaction terms that are most predictive of the outcome. Lasso is particularly useful here as it performs variable selection by penalizing the coefficients of less relevant variables, ultimately setting them to zero, which leads to a more interpretable model.
+In this part of the analysis, we implemented Lasso regression to identify potential moderators of treatment effects on smoking abstinence. Lasso reduces the model to a subset of variables and interactions most predictive of the outcome by penalizing less relevant coefficients, setting them to zero, and enhancing interpretability.
 
-The training set was used to build the Lasso model, optimizing the selection of variables and interactions by identifying the subset that most effectively predicts smoking abstinence. Cross-validation on the training data determined the best penalty parameter (lambda), balancing the trade-off between model complexity and predictive accuracy.
+The model was trained on the training set, with cross-validation used to determine the optimal penalty parameter (lambda), balancing model simplicity and predictive accuracy. The test set was then used to evaluate the model's generalizability to new data, ensuring robustness.
 
-After training the model, we evaluated it on the test set, providing an unbiased assessment of how well the selected variables and interactions generalize to new data. This approach ensures that the model is robust and capable of making reliable predictions beyond the original dataset.
+The final model coefficients at the optimal lambda include only variables and interactions with non-zero coefficients. Tables 4 and 5 present two columns: one showing how often each variable was selected across the imputed datasets generated by MICE, and another reporting the odds ratio (OR) for each selected variable. This column is more useful than the average coefficients column as the outcome is binary and thus we can interpret it easier using OR.This approach highlights significant moderators of smoking abstinence while maintaining a streamlined model.
 
-The final model coefficients at the optimal lambda include only those variables and interactions with non-zero coefficients, which are presented in the resulting tables (Table 4 and Table 5). This selection helps identify significant moderators of smoking abstinence while maintaining a simpler model.
+## \textcolor{violet}{Elastic Net Regression}
 
-!!placeholder
+Furthermore, we implemented Elastic Net regression to identify potential moderators of treatment effects on smoking abstinence. Elastic Net combines the penalties of Lasso and Ridge regression, making it well-suited for handling correlated predictors and selecting a subset of variables that are most predictive of the outcome.
 
-!!placeholder
+Similarly, the model was trained on the training set, with cross-validation used to determine the optimal penalty parameter (lambda, while alpha=0.5), balancing model complexity and predictive accuracy. The test set was then used to evaluate the model's generalizability to new data, ensuring robustness.
 
-!!placeholder
+Similar to Lasso above, Tables 4 and 5 present two columns: one showing how often each variable was selected across the imputed datasets generated by MICE, and the other reporting the odds ratio (OR) for each selected variable. 
 
-!!placeholder
+# \textcolor{violet}{Results}
 
-!!placeholder
-!!placeholder
+## \textcolor{violet}{First Objective}
 
 ```{r}
 # To identify the potential interaction terms for moderator effects
@@ -707,9 +714,8 @@ lasso_df <- result_table_lasso %>%
   mutate(`Lasso OR` = exp(`Lasso Average Coef`))
 
 
-
 # Merge all data frames based on variable names
-combined_df <- full_join(lasso_df, enet_df, by = "variable") %>%
+combined_df <- full_join(lasso_df[,c(1,2,4)], enet_df[,c(1,2,4)], by = "variable") %>%
   mutate(across(where(is.numeric), ~ round(.x, 4))) 
 
 # Remove the intercept row
@@ -742,13 +748,18 @@ combined_df <- combined_df %>%
 # Display the final combined table with grouped headers
 combined_df %>%
   kable(row.names = F,
-        col.names = c("Variable", "Selection Times","Average Coef", "OR", "Selection Times", "Average Coef", "OR"),
+        col.names = c("Variable", "Selection Times","Average OR", "Selection Times", "Average OR"),
         caption = "Summary of Average Coefficients and Odds Ratios for Potential Moderator Effects across Model Selection Methods") %>%
-  add_header_above(c(" " = 1, "Lasso" = 3, "Elastic Net" = 3)) %>%
-  kable_styling(full_width = F, position = "center", font_size = 9)
+  add_header_above(c(" " = 1, "Lasso" = 2, "Elastic Net" = 2)) %>%
+  kable_styling(full_width = F, position = "center", font_size = 9, 
+                latex_options = c("striped"),
+                stripe_color = "gray!15")
 
 ```
 
+The table summarizes results from Lasso and Elastic Net models, highlighting key moderators of smoking abstinence. Variables selected consistently (4 or 5 times) are most important. In both models, `NMR` (Lasso OR = 1.4188; Elastic Net OR = 1.313) and `edu_merged3:inc3` (Lasso OR = 1.1509; Elastic Net OR = 1.1175) increase the odds of abstinence, while `edu_merged2:Only.Menthol1` (Lasso OR = 0.4953; Elastic Net OR = 0.6152) and `mde_curr1` (Lasso OR = 0.6287; Elastic Net OR = 0.7187) significantly reduce the odds.
+
+Race and interaction effects also play a role. The variable `raceHispanic:Var1` (Lasso OR = 0.371; Elastic Net OR = 0.5138) strongly decreases the likelihood of abstinence, while `raceBlack` shows a smaller negative effect in both models. The results emphasize `NMR` and income (`inc3`) as positive moderators and menthol use, depression, and some racial/interaction variables as barriers to quitting. The consistency across models highlights the robustness of these findings.
 
 ```{r}
 # Initialize lists to store results for each imputation
@@ -836,6 +847,8 @@ for (i in 1:5) {
 
 
 ```
+
+
 
 ```{r}
 # Extract numeric AUC values from the list of AUC objects
@@ -941,7 +954,7 @@ calib_combined_lasso$loess_pred <- predict(loess_fit, calib_combined_lasso$predi
 
 # Plot Calibration Curve with Error Bars
 calib_error_bar_lasso = ggplot(calib_combined_lasso) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +
   geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
                     ymax = observed + 1.96 * se),
                 colour="black", width=.01)+
@@ -959,11 +972,11 @@ calib_combined_lasso <- calib_combined_lasso %>%
 
 calib_loess_lasso = ggplot(calib_combined_lasso, aes(x = predicted, y = observed)) +
   # Flexible calibration (Loess)
-  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_line(aes(y = loess_pred), color = "black", linetype = "dashed") +  
   geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
-  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
-  scale_color_manual(values = c("Ideal" = "red",
-                                "Flexible calibration" = "slateblue3")) +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "purple",
+                                "Flexible calibration" = "black")) +
   scale_linetype_manual(values = c("Ideal" = "solid",
                                    "Flexible calibration" = "dashed")) +
   labs(x = "Predicted Probability of Smoking Abstinence",
@@ -984,7 +997,7 @@ calib_combined_enet$loess_pred <- predict(loess_fit, calib_combined_enet$predict
 
 # Plot Calibration Curve with Error Bars
 calib_error_bar_enet = ggplot(calib_combined_enet) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +
   geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
                     ymax = observed + 1.96 * se),
                 colour="black", width=.01)+
@@ -1002,11 +1015,11 @@ calib_combined_enet <- calib_combined_enet %>%
 
 calib_loess_enet = ggplot(calib_combined_enet, aes(x = predicted, y = observed)) +
   # Flexible calibration (Loess)
-  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_line(aes(y = loess_pred), color = "black", linetype = "dashed") +  
   geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
-  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
-  scale_color_manual(values = c("Ideal" = "red",
-                                "Flexible calibration" = "slateblue3")) +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "purple",
+                                "Flexible calibration" = "black")) +
   scale_linetype_manual(values = c("Ideal" = "solid",
                                    "Flexible calibration" = "dashed")) +
   labs(x = "Predicted Probability of Smoking Abstinence",
@@ -1053,24 +1066,26 @@ grid.arrange(
 
 ### Calibration Plots (Left Panel)
 
-**Lasso Model** The calibration plot shows that the Lasso model’s predicted probabilities generally align with the observed smoking abstinence rates, but there is noticeable variability, especially at higher probability estimates. The model tends to slightly underpredict abstinence at lower probabilities and demonstrates a wider spread of actual values as probabilities increase.
-
-**Elastic Model**
+**Lasso Model** The calibration plot for the Lasso model shows a generally positive alignment between expected and actual probabilities of smoking abstinence, though with some variability at higher predicted probabilities. Error bars indicate increasing uncertainty at these levels.
+ 
+**Elastic Model** Similar to the Lasso model, the Elastic Net calibration plot demonstrates reasonable alignment between expected and actual abstinence probabilities, with slightly tighter error bars at intermediate predicted probabilities.
 
 ### LOESS-Smoothing Calibration Curves (Middle Panel)
 
-**Lasso Model** The LOESS curve for the Lasso model shows underprediction of abstinence at lower probabilities, with the curve staying below the ideal line at the low end. The model’s predictions improve slightly as probabilities increase but still demonstrate some deviation, indicating inconsistencies in predicted abstinence probability across ranges.
+**Lasso Model** The LOESS-smoothed curve for the Lasso model deviates somewhat from the ideal diagonal line, indicating moderate under- and over-predictions in certain ranges of predicted probabilities.
 
-**Elastic Model** 
+**Elastic Model** The LOESS-smoothed curve for the Elastic Net model follows the ideal diagonal more closely than Lasso, suggesting slightly better calibration overall. 
 
 ### ROC Curves (Right Panel)
 
-**Lasso Model** The ROC curve for the Lasso model yields an AUC of 0.74, indicating that this model has the best discrimination ability among the three models. It suggests that the Lasso model can effectively distinguish between abstinent and non-abstinent individuals.
+**Lasso Model** The ROC curve for the Lasso model achieves a mean AUC of 0.71, reflecting good but not perfect discrimination between abstinent and non-abstinent individuals.
 
-**Elastic Model**
+**Elastic Model** The Elastic Net model achieves a slightly higher mean AUC of 0.72, indicating slightly better discrimination compared to Lasso.
 
+## \textcolor{violet}{Second Objective}
 
-For the second objective, we explored baseline characteristic as potential predictors. Overall, we followed similar analysis procedure as in objective one, but due to lower model complexity, we could employ exhaustive replacement in best subset selection. Table 5 compares the coefficients of variables selected by the three different modeling approaches and their corresponding ORs. On this approach, we observed that three variables (ftcd_score, mde_curr and NMR) were present in all three models. As previously discussed, FTCD score and NMR could be potentional predictors for predicting the outcome.  Also, the OR of mde_curr is less than 1 in all three methods, meaning mde_curr has a similar behavior with ftcd_score. This means that participants with current MDD would have a lower success rate of smoking abstinence than those with past MDD. Finally, Var has a consistently >1 OR in all three methods used, while BA did not show a positive impact on abstinence, which is consistent with the findings from the original study (@hitsman2023efficacy).
+For the second objective, we explored baseline characteristic as potential predictors. Overall, we followed similar analysis procedure as in objective one, but due to lower model complexity, we could employ exhaustive replacement in best subset selection. Table 5 compares the ORs of variables selected by the three different moThe Elastic Net model achieves the same mean AUC of 0.71, reflecting comparable discrimination to the Lasso model.
+deling approaches, showing how many time these variables were selected from MICE as well.
 
 ```{r}
 ### Second objective - Predictors
@@ -1207,17 +1222,10 @@ process_coefs <- function(coefs_list) {
 result_table_enet <- process_coefs(elastic_net_coefs)
 result_table_lasso <- process_coefs(lasso_coefs)
 
-# Display the results
-# result_table_enet
-# result_table_lasso
-
 ```
 
 
 ```{r}
-# Summary table of coef
-large_threshold <- 100
-
 # Calculate OR for each coefficient for each method and rename columns correctly
 enet_df <- result_table_enet %>%
   rename(`Selection Times` = SelectionTimes) %>%
@@ -1232,9 +1240,8 @@ lasso_df <- result_table_lasso %>%
 
 
 # Merge all data frames based on variable names
-combined_df <- full_join(lasso_df, enet_df, by = "variable") %>%
-  mutate(across(where(is.numeric), ~ round(.x, 4))) %>%
-  mutate(across(where(is.numeric), ~ ifelse(as.numeric(.) > large_threshold, "*", .)))
+combined_df <- full_join(lasso_df[,c(1,2,4)], enet_df[, c(1,2,4)], by = "variable") %>%
+  mutate(across(where(is.numeric), ~ round(.x, 4))) 
 
 # Remove the intercept row
 combined_df <- combined_df[combined_df$variable != "(Intercept)", ]
@@ -1266,13 +1273,16 @@ combined_df <- combined_df %>%
 # Display the final combined table with grouped headers
 combined_df %>%
   kable(row.names = F,
-        col.names = c("Variable", "Selection Times","Average Coef", "OR", "Selection Times", "Average Coef", "OR"),
+        col.names = c("Variable", "Selection Times", "Average OR", "Selection Times", "Average OR"),
         caption = "Summary of Average Coefficients and Odds Ratios for Potential Predictor Effects across Model Selection Methods") %>%
-  add_header_above(c(" " = 1, "Lasso" = 3, "Elastic Net" = 3)) %>%
-  kable_styling(full_width = F, position = "center", font_size = 9)
+  add_header_above(c(" " = 1, "Lasso" = 2, "Elastic Net" = 2)) %>%
+  kable_styling(full_width = F, position = "center", font_size = 9, 
+                latex_options = c("striped"),
+                stripe_color = "gray!15")
 
 ```
 
+Both Lasso and Elastic Net consistently identify `NMR` (Lasso OR = 1.5813; Elastic Net OR = 1.6650) and `Var1` (Lasso OR = 5.4012; Elastic Net OR = 5.4363) as strong positive predictors of smoking abstinence. The variable `BA1` also shows a modest positive effect in both models (Lasso OR = 1.0725; Elastic Net OR = 1.0310). Conversely, `ftcd_score` (Lasso OR = 0.8831; Elastic Net OR = 0.8736), `mde_curr1` (Lasso OR = 0.7224; Elastic Net OR = 0.6910), and `raceOther` (Lasso OR = 0.5914; Elastic Net OR = 0.4960) consistently act as barriers, significantly reducing the odds of abstinence. The results are highly consistent across both models, reinforcing the importance of these predictors.
 
 ```{r}
 # Initialize lists to store results for each imputation
@@ -1466,7 +1476,7 @@ calib_combined_lasso$loess_pred <- predict(loess_fit, calib_combined_lasso$predi
 
 # Plot Calibration Curve with Error Bars
 calib_error_bar_lasso = ggplot(calib_combined_lasso) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +
   geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
                     ymax = observed + 1.96 * se),
                 colour="black", width=.01)+
@@ -1484,11 +1494,11 @@ calib_combined_lasso <- calib_combined_lasso %>%
 
 calib_loess_lasso = ggplot(calib_combined_lasso, aes(x = predicted, y = observed)) +
   # Flexible calibration (Loess)
-  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_line(aes(y = loess_pred), color = "black", linetype = "dashed") +  
   geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
-  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
-  scale_color_manual(values = c("Ideal" = "red",
-                                "Flexible calibration" = "slateblue3")) +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "purple",
+                                "Flexible calibration" = "black")) +
   scale_linetype_manual(values = c("Ideal" = "solid",
                                    "Flexible calibration" = "dashed")) +
   labs(x = "Predicted Probability of Smoking Abstinence",
@@ -1509,7 +1519,7 @@ calib_combined_enet$loess_pred <- predict(loess_fit, calib_combined_enet$predict
 
 # Plot Calibration Curve with Error Bars
 calib_error_bar_enet = ggplot(calib_combined_enet) +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +
   geom_errorbar(aes(x = predicted, ymin = observed - 1.96 * se,
                     ymax = observed + 1.96 * se),
                 colour="black", width=.01)+
@@ -1527,11 +1537,11 @@ calib_combined_enet <- calib_combined_enet %>%
 
 calib_loess_enet = ggplot(calib_combined_enet, aes(x = predicted, y = observed)) +
   # Flexible calibration (Loess)
-  geom_line(aes(y = loess_pred), color = "slateblue3", linetype = "dashed") +  
+  geom_line(aes(y = loess_pred), color = "black", linetype = "dashed") +  
   geom_ribbon(aes(ymin = loess_ci_lower, ymax = loess_ci_upper), alpha = 0.2, fill = "grey") +
-  geom_abline(intercept = 0, slope = 1, color = "red") +  # Perfect calibration line
-  scale_color_manual(values = c("Ideal" = "red",
-                                "Flexible calibration" = "slateblue3")) +
+  geom_abline(intercept = 0, slope = 1, color = "purple") +  # Perfect calibration line
+  scale_color_manual(values = c("Ideal" = "purple",
+                                "Flexible calibration" = "black")) +
   scale_linetype_manual(values = c("Ideal" = "solid",
                                    "Flexible calibration" = "dashed")) +
   labs(x = "Predicted Probability of Smoking Abstinence",
@@ -1574,29 +1584,49 @@ grid.arrange(
 )
 ```
 
-# Conclusions and Limitations
+### Calibration Plots (Left Panel)
 
-This study underscores the potential benefits of tailored smoking cessation interventions for individuals with Major Depressive Disorder (MDD). Our analysis revealed that baseline characteristics, particularly FTCD score and Nicotine Metabolism Ratio (NMR), significantly impact abstinence outcomes. Higher nicotine dependence was associated with lower cessation success, while a higher NMR indicated a greater likelihood of quitting. These findings suggest that individualized treatments, incorporating both pharmacotherapy and behavioral strategies, may be more effective for this high-risk population.
+**Lasso Model** The calibration plot shows a generally positive alignment between expected and actual probabilities of smoking abstinence, with some variability and wider error bars at higher predicted probabilities.
+ 
+**Elastic Model** Similar to Lasso, the Elastic Net plot shows reasonable alignment with expected probabilities, though the variability is slightly less pronounced at intermediate probability levels.
 
-The use of those two modeling approaches— Lasso and Elastic Net— allowed for a robust evaluation of predictive factors, capturing both common and unique predictors across methods. While Behavioral Activation and varenicline showed mixed effects on abstinence rates, variability in predictor selection highlights the complexity of predicting cessation success in individuals with MDD. This suggests that integrating insights from different models can help identify a broader range of influential factors, enhancing the personalization of treatment approaches.
+### LOESS-Smoothing Calibration Curves (Middle Panel)
 
-However, limitations of this study include a moderate sample size and reliance on self-reported smoking data, which may limit generalizability and introduce potential biases. Furthermore, the high number of interaction terms included in the full model for moderator effect exploration could introduce the issue of overfitting. Future research should expand on these findings by employing larger samples, objective measures of smoking, and long-term follow-up. Further exploration of additional predictors, such as genetic markers or psychiatric profiles, could provide deeper insights into treatment responses, ultimately guiding the development of optimized cessation strategies for those with MDD.
+**Lasso Model** The LOESS-smoothed curve demonstrates moderate deviations from the ideal diagonal, indicating some under- and over-predictions across the range of probabilities.
+
+**Elastic Model** The Elastic Net curve follows an almost ideal diagonal (more closely than Lasso), indicating slightly better calibration of predicted probabilities.
+
+### ROC Curves (Right Panel)
+
+**Lasso Model** The ROC curve achieves a mean AUC of 0.71, indicating good discrimination between abstinent and non-abstinent individuals.
+
+**Elastic Model** The Elastic Net model achieves the same mean AUC of 0.71, reflecting comparable discrimination to the Lasso model.
 
 
-# Data Privacy and Code Availability
+# \textcolor{violet}{Conclusions and Limitations}
 
-The analysis dataset was obtained by Dr. George Papandonatos from the Department of Biostatistics at Brown University and cannot be shared due to privacy. The replication code can be found at <https://github.com/AristofanisR/Practical_Data_Analysis_Project2>
+This study underscores the potential benefits of tailored smoking cessation interventions for individuals with Major Depressive Disorder (MDD). Our analysis revealed that baseline characteristics, particularly FTCD score, Nicotine Metabolism Ratio (`NMR`), and demographic factors such as race, income, and menthol use, significantly impact abstinence outcomes. Higher nicotine dependence (FTCD score) was consistently associated with lower cessation success, while a higher NMR indicated a greater likelihood of quitting. Additionally, barriers such as current depressive episodes, menthol cigarette use, and `raceOther` significantly reduced abstinence rates, reinforcing the need for targeted interventions. These findings suggest that individualized treatments combining pharmacotherapy and behavioral strategies may enhance outcomes for this high-risk population.
 
-\newpage
+The use of two modeling approaches—Lasso and Elastic Net—allowed for a robust evaluation of predictors, capturing both consistent and unique factors across methods. Key predictors such as `NMR`, FTCD score, and income level 3 emerged as robust across models, while variability in the selection of interaction terms highlighted the complexity of cessation success in individuals with MDD. These results demonstrate the value of integrating insights from multiple analytical frameworks to identify a broader range of influential factors, thereby enhancing the personalization of treatment approaches.
 
-# References
+However, this study is not without limitations. The reliance on a moderate sample size and self-reported smoking data may limit the generalizability of findings and introduce potential reporting biases. Additionally, the inclusion of a high number of interaction terms in moderator effect exploration could increase the risk of overfitting, potentially reducing the external validity of the models. Finally, while the models performed well, the average AUC values (~0.71–0.72) suggest room for improvement in predictive accuracy.
+
+Future research should build on these findings by employing larger sample sizes, objective measures of smoking, and long-term follow-up assessments to validate and refine predictive models. Incorporating additional predictors such as genetic markers, psychiatric profiles, and environmental factors could deepen our understanding of treatment responses. Ultimately, this work lays the foundation for developing more personalized and effective cessation strategies tailored to the unique needs of individuals with MDD.
+
+
+# \textcolor{violet}{Data Privacy and Code Availability}
+
+The analysis dataset was obtained by Dr. George Papandonatos from the Department of Biostatistics at Brown University and cannot be shared due to privacy. The replication code can be found at <https://github.com/AristofanisR/Practical_Data_Analysis_Portfolio/tree/main/Project2>
+
+
+# \textcolor{violet}{References}
 
 ::: {#refs}
 :::
 
 \newpage
 
-# Code Appendix
+# \textcolor{violet}{Code Appendix}
 
 ```{r ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
 ```
