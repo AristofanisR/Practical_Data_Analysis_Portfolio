@@ -2,7 +2,7 @@
 
 ## Abstract
 
-**Purpose**: This project evaluates the efficacy of smoking cessation treatments among adults with Major Depressive Disorder (MDD), focusing on identifying baseline factors that moderate and predict treatment success. This analysis aims to clarify the role of both behavioral and pharmacological interventions, examining interactions between participant characteristics and treatment components. 
+**Purpose**: This project evaluates the efficacy of smoking cessation treatments among adults with Major Depressive Disorder (MDD), focusing on identifying baseline factors that moderate and predict treatment success. This analysis aims to clarify the role of both behavioral and pharmacological interventions, examining interactions between participant characteristics and treatment components.
 
 **Methods**: Using data from a randomized, placebo-controlled trial, we assessed the effectiveness of Behavioral Activation (BA) and standard treatment (ST), each paired with either varenicline or a placebo, in supporting smoking cessation. Two statistical approaches-- Lasso regression and Elastic Net Regression with 10-fold cross validation-- were employed to identify significant moderators and predictors of abstinence at the end of treatment, based on a sample of 300 adult smokers with current or past MDD.![](main_figures/table1.png)
 
@@ -29,5 +29,3 @@
 **Data Analysis and Evaluation**: `glmnet`, `leaps`, `pROC`, `MASS`
 
 **Imputation and Missing Data Handling**: `MICE`
-
-
