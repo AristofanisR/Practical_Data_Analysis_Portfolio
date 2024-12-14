@@ -16,4 +16,4 @@ The analysis dataset was obtained by Dr. George Papandonatos from the Department
 
 This project is a collaboration with Dr. Zhijin Wu in the Biostatistics Department.
 
-For more details on each Project, go to the README files on each Project's repository.
+## For more details on each Project, go to the `README` files on each Project's repository.
